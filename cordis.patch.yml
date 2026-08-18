@@ -1,0 +1,5 @@
+# The DSH plugin layer for this bundle: inserts one host-side plugin row that
+# registers every skill under .agents/skills/ via ctx.skills.register.
+- insert:
+    - id: dsh-canvas-design-harness
+      name: dsh-canvas-design-harness

@@ -1,0 +1,47 @@
+purpose: >
+  Define the design-harness framework: a folder-mounted singleton Node HTTP
+  service that exposes an HTTP-MCP (JSON-RPC) interface, where each design
+  draft is an HTML file that is both browser-renderable and MCP-mutable.
+  Nodes are addressed by data-cf-id, typed by data-cf-type, and every write
+  is validated and atomic so the document's readability never changes.
+
+specs:
+  - spec_id: design_harness_singleton_service
+    expected_behavior:
+      - The CLI starts a singleton HTTP service and first probes the target port: when an existing harness instance answers, the new invocation registers its workspace on that instance and exits instead of starting a second server.
+      - Each startup adds or upserts one workspace by root path; the registry keeps a stable workspace id and the list of HTML files found under that root.
+      - The home page groups workspaces and lists each workspace's HTML files; opening a file loads its viewer.
+      - The viewer embeds the canvas (pan/zoom) and reloads or patches content when the service pushes a file update over SSE.
+    references:
+      - .agents/skills/canvas-design-harness/SKILL.md
+
+  - spec_id: design_harness_http_mcp
+    expected_behavior:
+      - The service exposes JSON-RPC 2.0 over HTTP at POST /mcp with tools/list, tools/call, resources/list, and resources/read.
+      - Write tools operate on the HTML document itself and return affected node ids; a command that fails parsing, schema validation, or execution changes nothing and leaves the file untouched.
+      - Tool names mirror the Figma object model (document.createPage, page.createFrame, frame.addComponent, node.setProps, node.getScreenshot, ...) with snake_case aliases, so the agent reuses its Figma knowledge instead of learning a new vocabulary.
+      - MCP calls are stateless like Figma's use_figma: document.selectPage and document.selectFrame are batch-only operations that set the selection for the rest of that batch (mirroring figma.currentPage), and across separate calls pageId/frameId must be explicit.
+      - batch runs several operations on one parse/serialize/write cycle and is atomic as a whole; a failing operation aborts the batch without changing the file.
+      - The tool set covers file/page/frame/component creation, text and property updates, state switching, FigJam connections, node removal, document and frame inspection, validation, screenshots, and workspace/file listing.
+      - Read operations never mutate state; get_document and resources/read return the parsed node tree of the HTML file.
+    references:
+      - .agents/skills/canvas-design-harness/SKILL.md
+
+  - spec_id: design_harness_html_document
+    expected_behavior:
+      - A design draft is one HTML file: browser-renderable and MCP-mutable, with an explicit page level (document -> pages -> frames -> components).
+      - Every page, frame, section, and component has a stable data-cf-id and an explicit data-cf-type; props are stored as data-* attributes on the node root.
+      - The framework parser validates the strict HTML subset before any read or write: duplicate ids, unknown types, unknown props, and tag imbalance are rejected.
+      - The serializer deterministically regenerates framework chrome (toolbar, stage, canvas, fig labels, zoom bar) and preserves node data, so parse(serialize(x)) round-trips and MCP writes keep the file readable with minimal diffs.
+      - Writes are atomic (temp file + rename); a failed parse, validation, or mutation leaves the original file byte-for-byte unchanged.
+      - No separate model file is authoritative; the HTML file is the source of truth.
+      - document.createFile yields an empty document without a default page; a journey is expressed as one page holding multiple frames (each frame a step of the flow), never as extra pages.
+    references:
+      - .agents/skills/canvas-design-harness/SKILL.md
+
+  - spec_id: design_harness_open_source_naming
+    expected_behavior:
+      - No file name or new identifier in the skill uses the ClueGo brand keyword; shared assets are named canvas-frames.css and canvas-frames.js, and the demo root id is canvas-frames-demo.
+      - The skill keeps no dependency on project-specific brand names in paths, package names, or API identifiers.
+    references:
+      - .agents/skills/canvas-design-harness/SKILL.md

@@ -1,0 +1,34 @@
+{
+  "name": "dsh-canvas-design-harness",
+  "version": "0.1.0",
+  "description": "canvas-design-harness as a dual-spec package: a Codex/Claude skill under .agents/skills/ AND a DeepSeek Harness plugin bundle that registers it via ctx.skills.register.",
+  "license": "MIT",
+  "type": "module",
+  "main": "plugin.js",
+  "files": [
+    "plugin.js",
+    "cordis.patch.yml",
+    ".agents/skills",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/askman-dev/dsh-canvas-design-harness.git"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "skill",
+    "plugin",
+    "canvas",
+    "design"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
