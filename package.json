@@ -8,6 +8,8 @@
   "files": [
     "plugin.js",
     "host",
+    "client",
+    "scripts",
     "cordis.patch.yml",
     ".agents/skills",
     "README.md"

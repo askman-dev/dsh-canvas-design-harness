@@ -88,21 +88,32 @@ npm-publishable as `dsh-canvas-design-harness`; `files` ships `plugin.js`,
 `host/`, `cordis.patch.yml`, `.agents/skills`, and the README, so an installed
 bundle carries the whole skill tree and the daemon.
 
-## Sync from upstream (Repo A)
+## Client half (DSH web GUI: 方案 A tabs)
 
-The skill content is a verbatim copy of Repo A. Re-sync with:
+Implemented in `client/`:
+
+- `client/logic.js` — pure tab-experience logic, **node-tested in Part D**:
+  tab ids/order, `designsDirFor` (cwd → designs dir), SSE frame parsing,
+  `node:selected` validation, click-to-ask draft text.
+- `client/design-view.js` — the browser half (dynamic-package source):
+  the `🗂️ 设计大厅` tab + per-file `🎨 <file>.html ✕` dynamic tabs on the
+  `conversation.view` ring, the gallery grid, the embedded canvas iframe
+  (`/open?file=`), and the postMessage click-to-ask bridge into the composer
+  draft. See `client/README.md` for the host RPC contract
+  (`harness.handle`: designsDirForSession / listDesigns / openUrl / setDraft /
+  subscribe) and verification status.
+
+**Verification split**: everything below the React layer is verified offline
+(32/32 wrapper smoke + Repo A 24/24 server self-test). The actual tab
+rendering against the live GUI requires the DSH web environment — mount the
+browser half and walk AC-01..AC-07 from the PRD manually.
+
+## Sync from upstream (Repo A — single source)
+
+The ENGINE (SKILL.md, reference/, server/, specs/) is owned by Repo A (the
+Codex skill) and copied here VERBATIM — there is only one implementation.
+Re-sync and re-test both sides with:
 
 ```sh
-rm -rf .agents/skills/canvas-design-harness
-cp -R <upstream-skill-dir> .agents/skills/canvas-design-harness
-node test/smoke.mjs
+scripts/sync-from-upstream.sh [upstream-skill-dir]
 ```
-
-## Client half (roadmap)
-
-The GUI part — a `[🗂️ 设计大厅]` tab plus per-file dynamic tabs opened from
-the gallery (方案 A), an embedded canvas iframe, and the click-to-ask
-postMessage bridge — is designed against `conversation.view` /
-`ctx.slots.register` and Repo A's `design_harness_external_viewer_bridge`
-spec, but is not yet implemented in this repo. It needs the DSH web build
-environment to verify; the protocol it implements is fixed by Repo A's specs.

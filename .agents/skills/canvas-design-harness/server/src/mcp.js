@@ -112,7 +112,7 @@ export class Mcp {
         const result = this.runOp(canonical, doc, args, fileId, { pageId: null, frameId: null });
         if (!READ_ONLY.has(canonical)) {
           this.write(file, serializeDocument(doc));
-          this.events.emit(file.id);
+          this.events.emit(file);
         }
         return result;
       }
@@ -152,7 +152,7 @@ export class Mcp {
     }
     if (mutated) {
       this.write(file, serializeDocument(doc));
-      this.events.emit(file.id);
+      this.events.emit(file);
     }
     return { count: results.length, results };
   }

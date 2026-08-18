@@ -12,6 +12,34 @@
  *   .cf-ls with [data-ls-state] panels, [data-ls-go] controls,
  *     textarea[data-ls-draft], [data-ls-submit]
  */
+
+/* #cf-node-selected-payload-start
+ * Pure payload builder for the viewer bridge
+ * (spec design_harness_external_viewer_bridge). Kept outside the IIFE and
+ * marker-wrapped so the server smoke test can extract and unit-test it; the
+ * browser half calls it from notifyNodeSelected below.
+ */
+function buildNodeSelectedPayload(info) {
+  var fileId = info && info.fileId ? String(info.fileId) : null;
+  var payload = {
+    fileId: fileId,
+    pageId: info && info.pageId != null ? String(info.pageId) : null,
+    nodeId: info && info.nodeId ? String(info.nodeId) : null,
+    nodeType: info && info.nodeType ? String(info.nodeType) : 'frame',
+    nodeLabel: info && info.nodeLabel != null ? String(info.nodeLabel) : null,
+  };
+  if (info && info.rect && typeof info.rect === 'object') {
+    payload.rect = {
+      x: Number(info.rect.x) || 0,
+      y: Number(info.rect.y) || 0,
+      width: Number(info.rect.width) || 0,
+      height: Number(info.rect.height) || 0,
+    };
+  }
+  return { source: 'canvas-design-harness', type: 'node:selected', payload: payload };
+}
+/* #cf-node-selected-payload-end */
+
 (function () {
   var root = document.getElementById('canvas-frames-demo');
   if (!root) return;
@@ -191,10 +219,46 @@
       }
     }, { passive: false });
 
+    // Viewer bridge (spec design_harness_external_viewer_bridge): broadcast a
+    // node:selected message to the embedding parent when the user clicks a
+    // frame. Pure enhancement — without a parent listener it is a no-op.
+    function notifyNodeSelected(st, fig, frame, index) {
+      var parent = window.parent;
+      if (!parent || parent === window || typeof parent.postMessage !== 'function') return;
+      var fileId = null;
+      try {
+        fileId = new URLSearchParams(window.location.search).get('file');
+      } catch (error) { /* not embedded via /open */ }
+      var pageEl = frame.closest ? frame.closest('.cf-page') : null;
+      var nameEl = fig.querySelectorAll('.cf-fig-label span')[1];
+      var labelEl = fig.querySelector('.cf-fig-label b');
+      var r = frame.getBoundingClientRect();
+      var v = viewportSize(st);
+      parent.postMessage(
+        buildNodeSelectedPayload({
+          fileId: fileId,
+          pageId: pageEl ? pageEl.getAttribute('data-page') : null,
+          nodeId: frame.getAttribute('data-cf-id') || 'frame-' + index,
+          nodeType: frame.getAttribute('data-cf-type') || 'frame',
+          nodeLabel: nameEl ? nameEl.textContent : labelEl ? labelEl.textContent : null,
+          rect: {
+            x: (r.left - v.left - st.T.x) / st.T.s,
+            y: (r.top - v.top - st.T.y) / st.T.s,
+            width: r.width / st.T.s,
+            height: r.height / st.T.s,
+          },
+        }),
+        '*',
+      );
+    }
+
     st.figs.forEach(function (fig, i) {
       var frame = fig.querySelector('.cf-frame');
       if (frame) {
-        frame.addEventListener('click', function () { selectFrame(st, i, true); });
+        frame.addEventListener('click', function () {
+          selectFrame(st, i, true);
+          notifyNodeSelected(st, fig, frame, i);
+        });
       }
     });
     var zoomButtons = page.querySelectorAll('.cf-zoombar [data-zoom]');

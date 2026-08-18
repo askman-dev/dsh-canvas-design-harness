@@ -68,7 +68,18 @@ export class HarnessServer {
         res.end(JSON.stringify(workspace));
         return;
       }
+      if (req.method === 'GET' && url.pathname === '/workspaces') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ workspaces: this.registry.workspaces }));
+        return;
+      }
       if (req.method === 'GET' && url.pathname === '/') {
+        const wantsJson = String(req.headers.accept || '').includes('application/json');
+        if (wantsJson) {
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ workspaces: this.registry.workspaces }));
+          return;
+        }
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
         res.end(this.homeHtml());
         return;
@@ -149,10 +160,16 @@ class Events {
     res.on('close', () => this.clients.delete(client));
   }
 
-  emit(fileId) {
+  emit(file) {
+    const payload = {
+      workspaceId: file.workspaceId ?? null,
+      fileId: file.id,
+      action: 'update',
+      updatedAt: Date.now(),
+    };
     for (const client of this.clients) {
-      if (client.fileId === '*' || client.fileId === fileId) {
-        client.res.write(`event: updated\ndata: ${fileId}\n\n`);
+      if (client.fileId === '*' || client.fileId === file.id) {
+        client.res.write(`event: updated\ndata: ${JSON.stringify(payload)}\n\n`);
       }
     }
   }

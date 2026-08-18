@@ -29,6 +29,10 @@ conversation instead of opening a design tool.
   strict parser/serializer (no external dependency).
 - `specs/design_harness.yaml` - the skill's spec contracts (singleton
   service, HTTP-MCP, HTML document, open-source naming).
+- `specs/external_capabilities.yaml` - the external client contract
+  (process, HTTP, SSE, postMessage, MCP) that host wrappers implement
+  against, e.g. the DSH plugin dsh-canvas-design-harness. The server's
+  HTTP/SSE surface and the canvas's postMessage bridge follow it.
 
 Design drafts are not part of the framework: they live in `docs/designs/`
 (tracked in git), one HTML file per design. The skill itself contains only

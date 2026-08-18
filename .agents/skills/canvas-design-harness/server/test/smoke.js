@@ -253,6 +253,84 @@ try {
     if (!out.includes('reused harness')) throw new Error(`expected reuse, got: ${out}`);
   });
 
+  // ---- external capability contract (specs/external_capabilities.yaml) ----
+
+  await check('GET /workspaces returns JSON with file metadata', async () => {
+    const res = await fetch(`${BASE}/workspaces`);
+    const body = await res.json();
+    const ws = body.workspaces.find((item) => item.root === TMP);
+    if (!ws) throw new Error('workspace missing');
+    const file = ws.files.find((item) => item.name === 'demo.html');
+    if (!file) throw new Error('demo.html missing from metadata');
+    for (const key of ['id', 'relPath', 'pageCount', 'frameCount', 'updatedAt', 'workspaceId']) {
+      if (!(key in file)) throw new Error(`metadata field missing: ${key}`);
+    }
+    if (file.pageCount < 1 || file.frameCount < 1) throw new Error(`bad counts: ${file.pageCount}/${file.frameCount}`);
+    if (typeof file.updatedAt !== 'number') throw new Error('updatedAt not a number');
+    if (file.relPath !== 'demo.html') throw new Error(`bad relPath: ${file.relPath}`);
+    if (file.workspaceId !== workspaceId) throw new Error('workspaceId mismatch');
+  });
+
+  await check('GET / with Accept: application/json serves JSON', async () => {
+    const res = await fetch(`${BASE}/`, { headers: { accept: 'application/json' } });
+    const body = await res.json();
+    if (!Array.isArray(body.workspaces)) throw new Error('expected workspaces JSON');
+  });
+
+  await check('file ids are stable across workspace re-scans', async () => {
+    const before = (await json('POST', `${BASE}/workspaces`, { root: TMP })).data.files.find((f) => f.name === 'demo.html').id;
+    const after = (await json('POST', `${BASE}/workspaces`, { root: TMP })).data.files.find((f) => f.name === 'demo.html').id;
+    if (before !== after || before !== fileId) throw new Error(`unstable id: ${before} vs ${after} vs ${fileId}`);
+  });
+
+  await check('SSE frames carry JSON { workspaceId, fileId, action, updatedAt }', async () => {
+    const controller = new AbortController();
+    const streamPromise = (async () => {
+      const res = await fetch(`${BASE}/events?fileId=${fileId}`, { signal: controller.signal });
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const frame = /event: updated\ndata: (.+)\n\n/.exec(buffer);
+        if (frame) return JSON.parse(frame[1]);
+      }
+      return null;
+    })();
+    await new Promise((r) => setTimeout(r, 200));
+    await call('node.setProps', { fileId, nodeId, props: { description: 'sse-ping' } });
+    const event = await streamPromise;
+    controller.abort();
+    if (!event || event.action !== 'update' || event.fileId !== fileId || event.workspaceId !== workspaceId) {
+      throw new Error(`bad event: ${JSON.stringify(event)}`);
+    }
+    if (typeof event.updatedAt !== 'number') throw new Error('updatedAt missing');
+  });
+
+  await check('viewer bridge payload contract (buildNodeSelectedPayload)', async () => {
+    const source = fs.readFileSync(path.join(ROOT, '..', 'reference', 'canvas-frames.js'), 'utf8');
+    const start = source.indexOf('/* #cf-node-selected-payload-start');
+    const end = source.indexOf('/* #cf-node-selected-payload-end');
+    if (start < 0 || end < 0) throw new Error('bridge markers missing');
+    const fnSource = source.slice(source.indexOf('function buildNodeSelectedPayload', start), source.lastIndexOf('}', end) + 1);
+    const buildNodeSelectedPayload = new Function(`return (${fnSource});`)();
+    const empty = buildNodeSelectedPayload({});
+    if (empty.source !== 'canvas-design-harness' || empty.type !== 'node:selected') throw new Error('envelope wrong');
+    if (empty.payload.nodeId !== null || empty.payload.nodeType !== 'frame') throw new Error('defaults wrong');
+    const full = buildNodeSelectedPayload({
+      fileId: 'file_abc',
+      pageId: 'p1',
+      nodeId: 'n1',
+      nodeType: 'button',
+      nodeLabel: '登录',
+      rect: { x: 1, y: 2, width: 393, height: 852 },
+    });
+    if (full.payload.nodeLabel !== '登录' || full.payload.rect.width !== 393) throw new Error('payload fields wrong');
+    if (full.payload.fileId !== 'file_abc' || full.payload.pageId !== 'p1') throw new Error('ids wrong');
+  });
+
   console.log(checks.join('\n'));
   const failed = checks.filter((line) => line.startsWith('FAIL')).length;
   console.log(`\n${checks.length - failed}/${checks.length} checks passed`);

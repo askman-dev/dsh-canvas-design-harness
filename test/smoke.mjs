@@ -153,8 +153,50 @@ check(
 const valid = await harness.mcpCall("document.validate", { fileId: created.fileId });
 check("C: validate reports a document", !!valid && Array.isArray(valid.problems ?? valid.errors ?? []), JSON.stringify(valid).slice(0, 80));
 
+// C5: protocol conformance of the NEW Repo A capabilities through the wrapper
+const filesAfter = await harness.listFiles(designsDir);
+const flowMeta = filesAfter.find((f) => f.name === "flow.html");
+check("C: metadata present on created design", !!flowMeta && flowMeta.pageCount >= 1 && flowMeta.frameCount >= 1 && typeof flowMeta.updatedAt === "number", JSON.stringify(flowMeta));
+const rescan = await harness.listFiles(designsDir);
+const sameId = rescan.find((f) => f.name === "flow.html")?.id === flowMeta?.id;
+check("C: file id stable across re-scans", !!sameId, flowMeta?.id);
+
+let sseJson = null;
+const unsub2 = harness.events(created.fileId, (ev) => {
+  if (ev.event === "updated") sseJson = ev.data;
+});
+await new Promise((r) => setTimeout(r, 300));
+await harness.mcpCall("batch", {
+  fileId: created.fileId,
+  operations: [{ tool: "node.setProps", arguments: { nodeId: batch.results[2].componentId ?? batch.results[2].nodeId, props: { label: "开始" } } }],
+});
+await new Promise((r) => setTimeout(r, 400));
+unsub2();
+let parsedEvent = null;
+try {
+  parsedEvent = JSON.parse(sseJson ?? "null");
+} catch {
+  /* keep null */
+}
+check("C: SSE frame is JSON {workspaceId, fileId, action, updatedAt}", !!parsedEvent && parsedEvent.action === "update" && parsedEvent.fileId === created.fileId, String(sseJson));
+
 harness.dispose();
 rmSync(designsDir, { recursive: true, force: true });
+
+// ---- Part D: client half pure logic (方案 A tabs) ----
+const logic = await import(`file://${REPO_ROOT}/client/logic.js`);
+check("D: designsDirFor appends docs/designs", logic.designsDirFor("/repo/proj") === "/repo/proj/docs/designs");
+check("D: designsDirFor passes through designs dirs", logic.designsDirFor("/repo/proj/docs/designs") === "/repo/proj/docs/designs");
+check("D: designsDirFor honors override", logic.designsDirFor("/x", "/y/designs") === "/y/designs");
+check("D: fileTabId stable", logic.fileTabId("file_abc") === "design:file:file_abc");
+check("D: tab order after gallery", logic.fileTabOrder(0) > logic.GALLERY_TAB_ORDER);
+const frame = logic.parseSseFrame(JSON.stringify({ workspaceId: "ws1", fileId: "f1", action: "update", updatedAt: 123 }));
+check("D: parseSseFrame extracts fields", frame.ok && frame.fileId === "f1" && frame.action === "update" && frame.updatedAt === 123);
+check("D: parseSseFrame rejects garbage", logic.parseSseFrame("not-json").ok === false);
+check("D: nodeSelectedMessageOk validates envelope", logic.nodeSelectedMessageOk({ source: "canvas-design-harness", type: "node:selected", payload: { nodeId: "n1" } }));
+check("D: nodeSelectedMessageOk rejects impostors", !logic.nodeSelectedMessageOk({ source: "evil", type: "node:selected", payload: { nodeId: "n1" } }));
+check("D: draftForNodeSelected builds click-to-ask text", logic.draftForNodeSelected({ nodeId: "n1", nodeLabel: "登录", nodeType: "button" }) === "请修改设计稿中的(button)节点「登录」 (ID: n1)：");
+check("D: designTabLabel strips .html", logic.designTabLabel("login-flow.html") === "login-flow");
 
 console.log(failures === 0 ? "\nsmoke: OK" : `\nsmoke: ${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
