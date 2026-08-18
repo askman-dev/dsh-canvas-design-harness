@@ -15,7 +15,7 @@ import {
   parseDocument,
   serializeDocument,
 } from './html.js';
-import { canHaveChildren, validateProps, validateType } from './components.js';
+import { canHaveChildren, validateFrameProps, validatePageProps, validateProps, validateType } from './components.js';
 import { screenshotDocument } from './screenshot.js';
 
 const TEXT_PROPS = {
@@ -98,6 +98,11 @@ export class Mcp {
         throw new Error(`${canonical} is only valid inside batch (MCP calls are stateless)`);
       case 'batch':
         return this.opBatch(args);
+      case 'workspace.list':
+      case 'workspace.listFiles': {
+        const result = this.runOp(canonical, { pages: [] }, args, null, { pageId: null, frameId: null });
+        return result;
+      }
       default: {
         const fileId = args.fileId;
         const file = this.file(fileId);
@@ -117,6 +122,10 @@ export class Mcp {
   opCreateFile(args) {
     const workspace = this.registry.findWorkspace(args.workspaceId);
     if (!workspace) throw new Error(`workspace not found: ${args.workspaceId}`);
+    if (typeof args.name !== 'string' || args.name.trim() === '') throw new Error('file name must be a non-empty string');
+    if (path.isAbsolute(args.name) || args.name.includes('/') || args.name.includes('\\') || args.name === '.' || args.name === '..') {
+      throw new Error('file name must be a direct child of the workspace');
+    }
     const safeName = args.name.endsWith('.html') ? args.name : `${args.name}.html`;
     const htmlPath = path.join(workspace.root, safeName);
     const doc = emptyDocument(safeName.replace(/\.html$/, ''));
@@ -133,13 +142,18 @@ export class Mcp {
     // call setCurrentPageAsync (document.selectPage / selectFrame) mid-script.
     const current = { pageId: doc.pages[0]?.id || null, frameId: null };
     const results = [];
+    let mutated = false;
     for (const operation of args.operations || []) {
       const canonical = ALIASES[operation.tool] || operation.tool;
       if (canonical === 'batch') throw new Error('batch cannot nest batch');
-      results.push(this.runOp(canonical, doc, operation.arguments || {}, fileId, current));
+      const result = this.runOp(canonical, doc, operation.arguments || {}, fileId, current);
+      results.push(result);
+      mutated ||= Boolean(result?.createdIds?.length || result?.mutatedIds?.length);
     }
-    this.write(file, serializeDocument(doc));
-    this.events.emit(file.id);
+    if (mutated) {
+      this.write(file, serializeDocument(doc));
+      this.events.emit(file.id);
+    }
     return { count: results.length, results };
   }
 
@@ -148,7 +162,10 @@ export class Mcp {
   runOp(canonical, doc, args, fileId, current) {
     switch (canonical) {
       case 'document.createPage': {
-        const page = { id: newId('page'), type: 'page', props: { name: args.name || '页面' }, frames: [] };
+        const name = args.name === undefined ? '页面' : args.name;
+        const pageError = validatePageProps({ name });
+        if (pageError) throw new Error(pageError);
+        const page = { id: newId('page'), type: 'page', props: { name }, frames: [] };
         doc.pages.push(page);
         current.pageId = page.id;
         current.frameId = null;
@@ -173,7 +190,11 @@ export class Mcp {
         if (!pageId) throw new Error('pageId required (or use batch with document.selectPage)');
         const page = findPage(doc, pageId);
         if (!page) throw new Error(`page not found: ${pageId}`);
-        const size = args.size || { w: 393, h: 852 };
+        const name = args.name === undefined ? 'Frame' : args.name;
+        const kind = args.kind === undefined ? 'phone' : args.kind;
+        const size = args.size === undefined ? { w: 393, h: 852 } : args.size;
+        const frameError = validateFrameProps({ name, kind, size });
+        if (frameError) throw new Error(frameError);
         const frame = {
           id: newId('frame'),
           type: 'frame',
@@ -230,8 +251,11 @@ export class Mcp {
         return { mutatedIds: [args.nodeId], ok: true };
       }
       case 'node.connect': {
-        const owner = frameOwningNode(doc, args.fromId) || frameOwningNode(doc, args.toId);
-        if (!owner) throw new Error('connector needs an existing node in a frame');
+        const fromOwner = frameOwningNode(doc, args.fromId);
+        const toOwner = frameOwningNode(doc, args.toId);
+        if (!fromOwner || !toOwner) throw new Error('connector needs two existing nodes in a frame');
+        if (fromOwner !== toOwner) throw new Error('connector endpoints must belong to the same frame');
+        const owner = fromOwner;
         const node = { id: newId('c'), type: 'connector', props: { fromId: args.fromId, toId: args.toId }, children: [] };
         owner.components.push(node);
         return { createdIds: [node.id], nodeId: node.id };

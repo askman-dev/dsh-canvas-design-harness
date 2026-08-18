@@ -1,5 +1,12 @@
-# The DSH plugin layer for this bundle: inserts one host-side plugin row that
-# registers every skill under .agents/skills/ via ctx.skills.register.
+# The DSH plugin layer for this bundle: inserts the host-side plugin rows.
+# Row 1 (dsh-canvas-design-harness) registers every skill under
+# .agents/skills/ via ctx.skills.register and mounts the ctx.canvasHarness
+# daemon lifecycle service. Row 2 (host/tools.js) turns the bundled
+# canvas-design-harness server into native model tools (canvas_harness_*);
+# the bare subpath resolves through the profile node_modules link.
 - insert:
     - id: dsh-canvas-design-harness
       name: dsh-canvas-design-harness
+
+    - id: dsh-canvas-design-harness-tools
+      name: dsh-canvas-design-harness/host/tools-entry.js

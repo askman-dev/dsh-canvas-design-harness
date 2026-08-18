@@ -72,6 +72,11 @@ try {
     const ws = await json('POST', `${BASE}/workspaces`, { root: TMP });
     workspaceId = ws.data.id;
     if (!workspaceId) throw new Error('no workspace id');
+    const listed = await call('workspace.list', {});
+    const files = JSON.parse(listed.data.result.content[0].text).workspaces;
+    if (!files.some((item) => item.id === workspaceId)) throw new Error('workspace.list failed');
+    const listedFiles = await call('workspace.listFiles', { workspaceId });
+    if (!Array.isArray(JSON.parse(listedFiles.data.result.content[0].text).files)) throw new Error('workspace.listFiles failed');
   });
 
   await check('create_file writes a browser-ready html', async () => {
@@ -83,14 +88,25 @@ try {
     }
   });
 
+  await check('create_file rejects traversal and absolute names', async () => {
+    for (const name of ['../escape', '/tmp/escape', 'nested/file']) {
+      const r = await call('document.createFile', { workspaceId, name });
+      if (!String(r.data.error?.message || '').includes('direct child')) throw new Error(`accepted ${name}`);
+    }
+  });
+
   let pageId;
   let frameId;
   let nodeId;
+  let buttonId;
   await check('create_page / create_frame / add_component', async () => {
     pageId = JSON.parse((await call('document.createPage', { fileId, name: 'P1' })).data.result.content[0].text).pageId;
     frameId = JSON.parse((await call('page.createFrame', { fileId, pageId, name: 'F1' })).data.result.content[0].text).frameId;
     nodeId = JSON.parse(
       (await call('frame.addComponent', { fileId, frameId, type: 'action-row', props: { label: '拍下单词表' } })).data.result.content[0].text,
+    ).nodeId;
+    buttonId = JSON.parse(
+      (await call('frame.addComponent', { fileId, frameId, type: 'button', props: { label: '开始', variant: 'toggle' } })).data.result.content[0].text,
     ).nodeId;
     if (!pageId || !frameId || !nodeId) throw new Error('missing ids');
   });
@@ -132,9 +148,10 @@ try {
 
   await check('set_props / set_state persist into the html', async () => {
     await call('node.setProps', { fileId, nodeId, props: { label: '从相簿选择' } });
+    await call('node.setProps', { fileId, nodeId: buttonId, props: { active: true } });
     await call('node.setState', { fileId, nodeId, state: 'input' });
     const html = fs.readFileSync(path.join(TMP, 'demo.html'), 'utf8');
-    if (!html.includes('data-label="从相簿选择"') || !html.includes('data-state="input"')) {
+    if (!html.includes('data-label="从相簿选择"') || !html.includes('data-active="true"') || !html.includes('data-state="input"')) {
       throw new Error('props/state not persisted');
     }
   });
@@ -221,7 +238,14 @@ try {
     if (!home.includes('demo.html')) throw new Error('home missing file');
     const viewer = await fetch(`${BASE}/open?file=${fileId}`);
     const html = await viewer.text();
-    if (!html.includes('canvas-frames-demo')) throw new Error('viewer missing canvas root');
+    if (!html.includes('canvas-frames-demo') || !html.includes("new EventSource('/events?fileId=")) throw new Error('viewer missing canvas live reload');
+  });
+
+  await check('read-only batch does not rewrite the file', async () => {
+    const before = fs.readFileSync(path.join(TMP, 'demo.html'), 'utf8');
+    await call('batch', { fileId, operations: [{ tool: 'document.getDocument', arguments: {} }] });
+    const after = fs.readFileSync(path.join(TMP, 'demo.html'), 'utf8');
+    if (before !== after) throw new Error('read-only batch rewrote the file');
   });
 
   await check('second CLI reuses singleton', async () => {

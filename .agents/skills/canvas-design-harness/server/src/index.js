@@ -54,6 +54,7 @@ export class HarnessServer {
 
   async handle(req, res) {
     const url = new URL(req.url, `http://127.0.0.1:${this.port}`);
+    let requestId = null;
     try {
       if (req.method === 'GET' && url.pathname === '/ping') {
         res.writeHead(200, { 'content-type': 'application/json' });
@@ -86,7 +87,9 @@ export class HarnessServer {
           return;
         }
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-        res.end(await readFile(html));
+        const source = await readFile(html);
+        const liveReload = `<script>(function(){var events=new EventSource('/events?fileId=${encodeURIComponent(file.id)}');events.addEventListener('updated',function(){location.reload();});})();</script>`;
+        res.end(source.replace('</body>', `${liveReload}</body>`));
         return;
       }
       if (req.method === 'GET' && url.pathname === '/events') {
@@ -95,6 +98,7 @@ export class HarnessServer {
       }
       if (req.method === 'POST' && url.pathname === '/mcp') {
         const body = JSON.parse(await readBody(req));
+        requestId = body?.id ?? null;
         const result = await this.mcp.dispatch(body.method, body.params);
         res.writeHead(200, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id ?? null, result }));
@@ -104,7 +108,7 @@ export class HarnessServer {
       res.end('not found');
     } catch (error) {
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32603, message: String(error.message || error) } }));
+      res.end(JSON.stringify({ jsonrpc: '2.0', id: requestId, error: { code: -32603, message: String(error.message || error) } }));
     }
   }
 

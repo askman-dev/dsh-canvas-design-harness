@@ -24,7 +24,7 @@ export const schemas = {
   },
   'action-row': { props: { label: 'string', description: 'string', icon: 'string', selected: 'boolean' }, children: false },
   'field': { props: { placeholder: 'string', value: 'string', lines: 'number' }, children: false },
-  'button': { props: { label: 'string', variant: 'string' }, children: false },
+  'button': { props: { label: 'string', variant: 'string', active: 'boolean' }, children: false },
   'heading': { props: { value: 'string' }, children: false },
   'title2': { props: { value: 'string' }, children: false },
   'sheet-header': { props: { backLabel: 'string', introActive: 'boolean' }, children: false },
@@ -62,6 +62,19 @@ export function validateProps(type, props) {
     if (kind === 'array' && !Array.isArray(value)) return `prop ${key} must be an array`;
   }
   return null;
+}
+
+export function validateFrameProps({ name, kind, size }) {
+  if (typeof name !== 'string') return 'frame name must be a string';
+  if (typeof kind !== 'string') return 'frame kind must be a string';
+  if (!size || typeof size !== 'object') return 'frame size must be an object';
+  if (!Number.isFinite(size.w) || size.w <= 0) return 'frame size.w must be a finite positive number';
+  if (!Number.isFinite(size.h) || size.h <= 0) return 'frame size.h must be a finite positive number';
+  return null;
+}
+
+export function validatePageProps({ name }) {
+  return typeof name === 'string' ? null : 'page name must be a string';
 }
 
 export function canHaveChildren(type) {

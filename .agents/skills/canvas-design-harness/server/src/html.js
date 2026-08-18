@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { renderNode, validateType, validateProps, canHaveChildren } from './components.js';
+import { renderNode, validateType, validateProps, validateFrameProps, validatePageProps, canHaveChildren } from './components.js';
 
 const REFERENCE_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../reference');
 const SHARED_CSS = fs.readFileSync(path.join(REFERENCE_DIR, 'canvas-frames.css'), 'utf8');
@@ -22,7 +22,8 @@ function esc(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 const VOID_TAGS = new Set(['br', 'img', 'hr', 'input', 'meta', 'link']);
@@ -157,16 +158,23 @@ function nodeFromAttrs(id, attrs) {
     }
     props[prop] = parsed;
   }
-  if (type === 'page') return { id, type, props, frames: [] };
+  if (type === 'page') {
+    const error = validatePageProps(props);
+    if (error) throw new Error(`${error} (node ${id})`);
+    return { id, type, props, frames: [] };
+  }
   if (type === 'frame') {
+    const frameProps = {
+      name: props.name ?? '',
+      kind: props.kind ?? 'phone',
+      size: { w: Number(props.w ?? 393), h: Number(props.h ?? 852) },
+    };
+    const frameError = validateFrameProps(frameProps);
+    if (frameError) throw new Error(`${frameError} (node ${id})`);
     return {
       id,
       type,
-      props: {
-        name: props.name ?? '',
-        kind: props.kind ?? 'phone',
-        size: { w: Number(props.w ?? 393), h: Number(props.h ?? 852) },
-      },
+      props: frameProps,
       components: [],
     };
   }

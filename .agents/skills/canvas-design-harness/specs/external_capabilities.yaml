@@ -1,0 +1,64 @@
+purpose: >
+  Define the stable external capability surface of the design-harness
+  framework: the process, HTTP, SSE, postMessage, and MCP contracts that any
+  external client — a standalone browser, another agent CLI, or a host plugin
+  such as the DSH wrapper (dsh-canvas-design-harness) — implements against.
+  The framework itself stays host-agnostic and independently runnable
+  (SKILL.md + reference/ + server/ work without any agent host); these specs
+  are the boundary that lets a host embed it without modification. Items
+  marked [to implement] are contracted surface the server does not emit yet
+  and MUST gain before the DSH wrapper ships.
+
+specs:
+  - spec_id: design_harness_external_process
+    expected_behavior:
+      - The service is a singleton: the CLI probes the port first and reuses a running instance instead of starting a second server (see design_harness_singleton_service).
+      - The service binds 127.0.0.1 only; the port defaults to 9321 and is overridable via CANVAS_HARNESS_PORT or --port.
+      - The service runs with zero external dependencies: node src/index.js <folder> is the only entry; no agent host, no npm install, no browser is required.
+    references:
+      - .agents/skills/canvas-design-harness/SKILL.md
+
+  - spec_id: design_harness_external_http
+    expected_behavior:
+      - GET /ping returns HTTP 200 with { ok: true, port, workspaces }.
+      - POST /workspaces { root } upserts one workspace by resolved root path and returns the workspace object with its files array.
+      - GET / serves the standalone HTML home page that groups workspaces and links each HTML file; this page is the host-independent gallery.
+      - GET /open?file=<fileId> serves the design draft HTML directly; the draft is self-contained (embedded css/js) so it renders identically standalone or inside an iframe.
+      - [to implement] GET /workspaces returns all workspaces as JSON with per-file metadata; GET / honors Accept: application/json by serving the same data as JSON instead of HTML.
+      - An unknown route returns 404; a malformed body or a failing write returns a JSON-RPC-shaped error and never mutates the file.
+    references:
+      - .agents/skills/canvas-design-harness/SKILL.md
+
+  - spec_id: design_harness_external_file_identity
+    expected_behavior:
+      - A design file is identified by the pair (workspace root, relative file name); file ids are process-local references, not stable identity.
+      - [to implement] Re-scanning a workspace (repeated POST /workspaces) MUST keep file ids stable for the lifetime of the process, so clients that hold a fileId across rescans stay valid.
+      - [to implement] File entries carry metadata: name, relative path, pageCount, frameCount, updatedAt (mtime), so a client gallery renders cards without parsing the HTML itself.
+      - Files named *.fragment.html are never listed.
+    references:
+      - .agents/skills/canvas-design-harness/SKILL.md
+
+  - spec_id: design_harness_external_events
+    expected_behavior:
+      - GET /events?fileId=<fileId> opens a text/event-stream; the connection first emits an `event: open` frame.
+      - Every successful write to a file emits one `event: updated` frame whose data carries the fileId.
+      - [to implement] Event frames are JSON objects: { workspaceId, fileId, action: "update" | "delete", updatedAt }; clients may subscribe without fileId to observe every workspace.
+      - A dropped connection is silent and stateless; clients reconnect and re-list to reconcile missed events.
+    references:
+      - .agents/skills/canvas-design-harness/SKILL.md
+
+  - spec_id: design_harness_external_viewer_bridge
+    expected_behavior:
+      - [to implement] The embedded canvas (reference/canvas-frames.js) broadcasts window.parent.postMessage({ source: "canvas-design-harness", type: "node:selected", payload: { fileId, pageId, nodeId, nodeType, nodeLabel?, rect? } }, "*") whenever the user selects a frame or component.
+      - The broadcast is a pure enhancement: with no parent listener it is dropped silently and changes nothing.
+      - Host clients MUST verify event.source and payload.source === "canvas-design-harness" before acting on the message.
+    references:
+      - .agents/skills/canvas-design-harness/SKILL.md
+
+  - spec_id: design_harness_external_mcp
+    expected_behavior:
+      - POST /mcp speaks JSON-RPC 2.0 with tools/list, tools/call, resources/list, and resources/read (see design_harness_http_mcp for the tool vocabulary).
+      - A generic client bridges any tool by name; tools take fileId/pageId/frameId, which a client resolves from (root, name) via workspace.listFiles.
+      - MCP calls are stateless: selection lives only inside a batch (design_harness_http_mcp).
+    references:
+      - .agents/skills/canvas-design-harness/SKILL.md

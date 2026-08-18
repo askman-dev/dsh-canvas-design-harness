@@ -110,6 +110,7 @@
       pinch: null,
       dragStart: null,
       moved: false,
+      initialized: false,
     };
 
     viewport.addEventListener('pointerdown', function (e) {
@@ -236,7 +237,7 @@
           }
         });
       }
-      Array.prototype.forEach.call(ls.querySelectorAll('[data-ls-go]'), function (ctrl) {
+      Array.prototype.forEach.call(ls.querySelectorAll('[data-ls-go]:not([data-ls-submit])'), function (ctrl) {
         ctrl.addEventListener('click', function (e) {
           e.stopPropagation();
           go(ctrl.getAttribute('data-ls-go'));
@@ -292,16 +293,11 @@
         }
         update();
       });
-      if (panels.length > 0) {
-        panels.forEach(function (p) {
-          p.classList.toggle('is-active', p.getAttribute('data-ls-state') === 'list');
-        });
-      }
     });
   }
 
-  var states = pages.map(buildPageState).filter(Boolean);
-  if (states.length === 0) return;
+  var states = pages.map(buildPageState);
+  if (!states.some(Boolean)) return;
   var current = -1;
 
   function activatePage(index) {
@@ -317,8 +313,11 @@
     if (!st) return;
     requestAnimationFrame(function () {
       requestAnimationFrame(function () {
-        fit(st);
-        selectFrame(st, 0, false);
+        if (!st.initialized) {
+          fit(st);
+          selectFrame(st, 0, false);
+          st.initialized = true;
+        }
       });
     });
     try {
@@ -335,12 +334,12 @@
     wireLaunchSheets(page);
   });
   var initial = parseInt((location.hash.match(/#page-(\d+)/) || [])[1] || '1', 10) - 1;
-  if (isNaN(initial) || initial < 0 || initial >= states.length) initial = 0;
+  if (isNaN(initial) || initial < 0 || initial >= pages.length) initial = 0;
   activatePage(initial);
   window.addEventListener('hashchange', function () {
     var m = (location.hash || '').match(/#page-(\d+)/);
     var idx = m ? parseInt(m[1], 10) - 1 : 0;
-    if (idx >= 0 && idx < states.length && idx !== current) {
+    if (idx >= 0 && idx < pages.length && idx !== current) {
       activatePage(idx);
     }
   });

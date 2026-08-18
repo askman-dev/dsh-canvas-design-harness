@@ -260,12 +260,15 @@ export function screenshotDocument(doc, { frameId } = {}) {
   const gap = 24;
   const maxW = Math.max(...frames.map((f) => f.frame.props.size.w || 393));
   const totalH = frames.reduce((sum, f) => sum + (f.frame.props.size.h || 852) + gap, gap);
+  let y = gap;
   const group = frames
-    .map(({ frame }, index) => {
+    .map(({ frame }) => {
       const x = (maxW - (frame.props.size.w || 393)) / 2;
-      const y = gap + index * ((frame.props.size.h || 852) + gap);
+      const frameHeight = frame.props.size.h || 852;
       const svg = frameToSvg(frame).replace(/^<svg[^>]*>|<\/svg>$/g, '');
-      return `<g transform="translate(${x} ${y})">${svg}</g>`;
+      const group = `<g transform="translate(${x} ${y})">${svg}</g>`;
+      y += frameHeight + gap;
+      return group;
     })
     .join('');
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${maxW} ${totalH}" width="${maxW}" height="${totalH}">${group}</svg>`;

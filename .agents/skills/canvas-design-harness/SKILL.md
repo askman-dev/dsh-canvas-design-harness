@@ -259,11 +259,12 @@ Rules implemented generically:
   document. Anything meant to be opened directly (e.g. files in `drafts/`)
   must be wrapped in a complete HTML document with
   `<meta charset="utf-8">` as the first meta tag.
-- **Keep demo sources in the repo**: fragment source and standalone pages live
-  in this skill's `drafts/` directory. Do not write visualization sources to
+- **Keep demo sources in the repo**: product and design sources live in the
+  tracked `docs/designs/` directory. The skill's `drafts/` directory is only
+  for framework demos or fragments. Do not write visualization sources to
   `~/.codex/visualizations/` or other shared Codex cache directories; they are
   off-limits. The in-conversation content reference can point directly at the
-  repo draft fragment.
+  tracked design source.
 - **Canvas geometry**: when computing content-space positions from
   `getBoundingClientRect()`, always subtract the viewport rect's `left`/`top`
   before converting through the current transform; otherwise frames land
