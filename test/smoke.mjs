@@ -10,15 +10,24 @@
  *         daemon service (createCanvasHarness) + tools bridge
  *         (registerCanvasTools) against a REAL spawned daemon on a test port
  *         with a temp designs folder: create / batch / read / validate / SSE.
+ * Part D: client half pure logic (方案 A tabs) — tab ids, designsDirFor, SSE
+ *         frame parsing, node:selected validation, draft text.
+ * Part E: browser-half host routes (/canvas/*) — designs listing by session
+ *         workspace and by explicit root, viewer 302, SSE proxy, 404 —
+ *         against a REAL daemon through a real http server.
+ * Part F: the webServer boot race — plugin.js applies before the webServer
+ *         service exists (real harness boot order); the /canvas routes must
+ *         register once webServer is provided (cordis inject-wait).
  *
  * Usage: node test/smoke.mjs
  */
 import { Context } from "file:///Users/admin/.npm/_npx/1e7f6d9597241db0/node_modules/@deepseek-ai/cordis/lib/index.js";
 import SkillRegistry from "file:///Users/admin/.npm/_npx/1e7f6d9597241db0/node_modules/@deepseek-ai/dsh-skill/lib/index.js";
 import { apply as fsApply, inject as fsInject, name as fsName } from "file:///Users/admin/.npm/_npx/1e7f6d9597241db0/node_modules/@deepseek-ai/dsh-skill-filesystem/lib/index.js";
+import http from "node:http";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -197,6 +206,105 @@ check("D: nodeSelectedMessageOk validates envelope", logic.nodeSelectedMessageOk
 check("D: nodeSelectedMessageOk rejects impostors", !logic.nodeSelectedMessageOk({ source: "evil", type: "node:selected", payload: { nodeId: "n1" } }));
 check("D: draftForNodeSelected builds click-to-ask text", logic.draftForNodeSelected({ nodeId: "n1", nodeLabel: "登录", nodeType: "button" }) === "请修改设计稿中的(button)节点「登录」 (ID: n1)：");
 check("D: designTabLabel strips .html", logic.designTabLabel("login-flow.html") === "login-flow");
+
+// ---- Part E: browser-half host routes (/canvas/*) against a real daemon ----
+const { registerCanvasRoutes } = pluginModule;
+const routesDir = mkdtempSync(join(tmpdir(), "ch-smoke-routes-"));
+mkdirSync(join(routesDir, "docs", "designs"), { recursive: true });
+writeFileSync(join(routesDir, "docs", "designs", "seed.html"), '<!doctype html><meta charset="utf-8"><title>seed</title>', "utf8");
+const routesPort = 9600 + Math.floor(Math.random() * 200);
+const routesHarness = createCanvasHarness({ skillDir: join(REPO_ROOT, ".agents", "skills", EXPECTED), port: routesPort });
+
+let routesRoute = null;
+const fakeWebServer = {
+  register: (route) => {
+    routesRoute = route;
+    return () => {
+      routesRoute = null;
+    };
+  },
+};
+const fakeWorkspaceRegistry = { list: () => [{ id: "ws-e", path: routesDir, title: "e", sessionIds: ["session-e1"] }] };
+const ctxE = {
+  logger: console,
+  get: (n) => (n === "webServer" ? fakeWebServer : n === "workspaceRegistry" ? fakeWorkspaceRegistry : undefined),
+};
+const disposeRoutes = registerCanvasRoutes(ctxE, routesHarness);
+check("E: /canvas route registered", !!routesRoute);
+
+const serverE = http.createServer((req, res) => routesRoute.handler(req, res));
+await new Promise((r) => serverE.listen(0, "127.0.0.1", r));
+const baseE = `http://127.0.0.1:${serverE.address().port}`;
+
+const r1 = await fetch(`${baseE}/canvas/designs?sessionId=session-e1`).then((r) => r.json());
+check("E: designs by sessionId resolves workspace→designsDir", r1.ok && r1.files?.some((f) => f.name === "seed.html"), JSON.stringify(r1.files?.map((f) => f.name)));
+
+const r2 = await fetch(`${baseE}/canvas/designs?root=${encodeURIComponent(join(routesDir, "docs", "designs"))}`).then((r) => r.json());
+check("E: designs by explicit root", r2.ok && r2.files?.length === 1 && !!r2.base, r2.base);
+
+const r3 = await fetch(`${baseE}/canvas/open?file=${encodeURIComponent(r2.files[0].id)}`, { redirect: "manual" });
+check("E: open redirects to the daemon viewer", r3.status === 302 && String(r3.headers.get("location")).includes("/open?file="), String(r3.headers.get("location")));
+
+// E4: SSE proxy — subscribe to a created file, then mutate to trigger updated
+const createdE = await routesHarness.mcpCall("document.createFile", { workspaceId: r2.files[0].workspaceId, name: "flow.html" });
+let sseE = "";
+const acE = new AbortController();
+const evtE = await fetch(`${baseE}/canvas/events?file=${encodeURIComponent(createdE.fileId)}`, { signal: acE.signal });
+const readerE = evtE.body.getReader();
+const decoderE = new TextDecoder();
+let openedE = false;
+let updatedE = false;
+let triggeredE = false;
+const deadlineE = Date.now() + 8000;
+while (Date.now() < deadlineE) {
+  let chunk;
+  try {
+    chunk = await readerE.read();
+  } catch {
+    break;
+  }
+  if (chunk.done) break;
+  sseE += decoderE.decode(chunk.value, { stream: true });
+  if (!openedE && sseE.includes("event: open")) openedE = true;
+  if (!triggeredE) {
+    triggeredE = true;
+    await routesHarness.mcpCall("document.createPage", { fileId: createdE.fileId, name: "P1" }).catch(() => {});
+  }
+  if (!updatedE && sseE.includes("event: updated")) {
+    updatedE = true;
+    break;
+  }
+}
+await readerE.cancel().catch(() => {});
+acE.abort();
+check("E: SSE proxy streams open + updated", openedE && updatedE, JSON.stringify(sseE.slice(-120)));
+
+const r4 = await fetch(`${baseE}/canvas/nope`);
+check("E: unknown /canvas path is 404", r4.status === 404, String(r4.status));
+
+disposeRoutes?.();
+serverE.close();
+routesHarness.dispose();
+rmSync(routesDir, { recursive: true, force: true });
+
+// ---- Part F: webServer boot race — routes register when webServer appears ----
+const ctxF = new Context();
+await ctxF.plugin(SkillRegistry);
+let routeF = null;
+const wsF = {
+  register: (route) => {
+    routeF = route;
+    return () => {
+      routeF = null;
+    };
+  },
+};
+await ctxF.plugin(plugin); // webServer NOT provided yet (real harness boot order)
+check("F: routes not registered before webServer", routeF === null, String(routeF !== null));
+ctxF.provide("webServer", wsF);
+await new Promise((r) => setTimeout(r, 100));
+check("F: routes registered after webServer provided", routeF !== null && routeF.path === "/canvas", routeF?.path);
+await ctxF.dispose?.();
 
 console.log(failures === 0 ? "\nsmoke: OK" : `\nsmoke: ${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

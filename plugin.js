@@ -23,10 +23,11 @@
 //
 // This file deliberately imports NOTHING from @deepseek-ai/* so it loads and
 // tests in a bare Cordis context (see test/smoke.mjs).
-import { existsSync, readFileSync, readdirSync, watch } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, watch } from "node:fs";
 import { spawn } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { designsDirFor } from "./client/logic.js";
 
 const REPO_ROOT = dirname(fileURLToPath(import.meta.url));
 const SKILLS_ROOT = join(REPO_ROOT, ".agents", "skills");
@@ -219,6 +220,173 @@ export function findServerSkillDir() {
   return undefined;
 }
 
+// Exported for offline tests (test/smoke.mjs Part E): the /canvas route family
+// and its workspace→designs-dir resolution, exercised against a real daemon.
+export { registerCanvasRoutes, resolveDesignsRoot };
+
+// ======================= web routes for the browser half =====================
+// The browser half (client/design-view.js) is a DSH client module served to
+// the web GUI. It talks to this host half over same-origin HTTP routes on the
+// harness web server (`ctx.webServer`), so no CORS and no framework RPC
+// extension is needed:
+//   GET /canvas/designs?sessionId=&root=  -> { ok, root, base, files }
+//   GET /canvas/open?file=<fileId>        -> 302 to the daemon viewer
+//   GET /canvas/events?file=<fileId>      -> SSE proxy of daemon update events
+// The webServer / workspaceRegistry services are accessed lazily (never via
+// `inject`) so plugin.js keeps loading in a bare Cordis test context.
+
+function writeJson(res, status, value) {
+  res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
+  res.end(JSON.stringify(value));
+}
+
+/** Resolve the designs dir: explicit ?root= wins, else the session's workspace. */
+function resolveDesignsRoot(ctx, params) {
+  const root = params.get("root");
+  if (root) return root.replace(/\/+$/, "");
+  const sessionId = params.get("sessionId");
+  if (!sessionId) return undefined;
+  let workspaceRegistry;
+  try {
+    workspaceRegistry = ctx.get("workspaceRegistry");
+  } catch {
+    workspaceRegistry = undefined;
+  }
+  if (workspaceRegistry && typeof workspaceRegistry.list === "function") {
+    for (const ws of workspaceRegistry.list()) {
+      if (ws.sessionIds && ws.sessionIds.includes(sessionId)) return designsDirFor(ws.path);
+    }
+  }
+  return undefined;
+}
+
+/** Register the /canvas/* route family. Returns a disposer (or undefined). */
+function registerCanvasRoutes(ctx, harness) {
+  let webServer;
+  try {
+    webServer = ctx.get("webServer");
+  } catch {
+    webServer = undefined;
+  }
+  if (!webServer || typeof webServer.register !== "function") {
+    if (ctx.logger) ctx.logger.warn(`${name}: webServer unavailable — browser half routes disabled`);
+    return undefined;
+  }
+  const handle = async (req, res) => {
+    try {
+      const url = new URL(req.url ?? "/", "http://127.0.0.1");
+      if (req.method === "GET" && url.pathname === "/canvas/designs") {
+        const root = resolveDesignsRoot(ctx, url.searchParams);
+        if (!root) {
+          writeJson(res, 200, { ok: false, code: "no-root", error: "无法确定设计稿目录（缺少 root，且会话不属于任何工作区）" });
+          return;
+        }
+        try {
+          const files = await harness.listFiles(root);
+          writeJson(res, 200, { ok: true, root, base: harness.base, files: files ?? [] });
+        } catch (err) {
+          writeJson(res, 200, { ok: false, code: "designs-dir-missing", root, error: String((err && err.message) || err) });
+        }
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/canvas/init") {
+        const root = resolveDesignsRoot(ctx, url.searchParams);
+        if (!root) {
+          writeJson(res, 200, { ok: false, code: "no-root", error: "无法确定设计稿目录" });
+          return;
+        }
+        try {
+          mkdirSync(root, { recursive: true });
+          const ws = await harness.ensureWorkspace(root);
+          let files = await harness.listFiles(root);
+          if (!files || files.length === 0) {
+            const created = await harness.mcpCall("document.createFile", { workspaceId: ws.id, name: "starter.html" });
+            const pageRes = await harness.mcpCall("document.createPage", { fileId: created.fileId, name: "主页面" });
+            await harness.mcpCall("batch", {
+              fileId: created.fileId,
+              operations: [
+                { tool: "page.createFrame", arguments: { fileId: created.fileId, pageId: pageRes.pageId, name: "欢迎使用 Canvas Design", size: { w: 1200, h: 800 } } },
+                { tool: "frame.addComponent", arguments: { fileId: created.fileId, type: "card", props: { title: "开始设计你的界面", description: "在对话框中向 Agent 描述需求，即可自动在此生成和修改设计稿。" } } },
+              ],
+            }).catch(() => {});
+            files = await harness.listFiles(root);
+          }
+          writeJson(res, 200, { ok: true, root, base: harness.base, files: files ?? [] });
+        } catch (err) {
+          writeJson(res, 200, { ok: false, root, error: String((err && err.message) || err) });
+        }
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/canvas/create") {
+        const root = resolveDesignsRoot(ctx, url.searchParams);
+        if (!root) {
+          writeJson(res, 200, { ok: false, code: "no-root", error: "无法确定设计稿目录" });
+          return;
+        }
+        try {
+          let name = url.searchParams.get("name") || "new-design.html";
+          if (!name.endsWith(".html")) name += ".html";
+          name = name.replace(/[^a-zA-Z0-9._-]/g, "_");
+          mkdirSync(root, { recursive: true });
+          const ws = await harness.ensureWorkspace(root);
+          const created = await harness.mcpCall("document.createFile", { workspaceId: ws.id, name });
+          await harness.mcpCall("document.createPage", { fileId: created.fileId, name: "页面 1" }).catch(() => {});
+          const files = await harness.listFiles(root);
+          writeJson(res, 200, { ok: true, root, base: harness.base, fileId: created.fileId, name, files: files ?? [] });
+        } catch (err) {
+          writeJson(res, 200, { ok: false, root, error: String((err && err.message) || err) });
+        }
+        return;
+      }
+      if (req.method === "GET" && url.pathname === "/canvas/open") {
+        const file = url.searchParams.get("file");
+        if (!file) {
+          res.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
+          res.end("missing file");
+          return;
+        }
+        res.writeHead(302, { location: harness.openUrl(file) });
+        res.end();
+        return;
+      }
+      if (req.method === "GET" && url.pathname === "/canvas/events") {
+        const file = url.searchParams.get("file");
+        res.writeHead(200, {
+          "content-type": "text/event-stream",
+          "cache-control": "no-cache",
+          connection: "keep-alive",
+        });
+        res.write("event: open\ndata: connected\n\n");
+        const unsubscribe = file
+          ? harness.events(file, (evt) => {
+              try {
+                res.write(`event: ${evt.event}\ndata: ${evt.data}\n\n`);
+              } catch {
+                /* socket gone */
+              }
+            })
+          : undefined;
+        req.on("close", () => unsubscribe?.());
+        return;
+      }
+      res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+      res.end("not found");
+    } catch (err) {
+      try {
+        writeJson(res, 500, { ok: false, error: String((err && err.message) || err) });
+      } catch {
+        /* socket gone */
+      }
+    }
+  };
+  try {
+    return webServer.register({ kind: "prefix", path: "/canvas", handler: handle });
+  } catch (err) {
+    if (ctx.logger) ctx.logger.warn(`${name}: /canvas route registration failed: ${err.message}`);
+    return undefined;
+  }
+}
+
 // ================================= plugin ===================================
 
 export const name = "dsh-canvas-design-harness";
@@ -263,9 +431,36 @@ export function apply(ctx) {
   const serverSkillDir = findServerSkillDir();
   let harness;
   let provideHarness;
+  let disposeRoutes;
   if (serverSkillDir) {
     harness = createCanvasHarness({ skillDir: serverSkillDir });
     provideHarness = ctx.provide("canvasHarness", harness);
+    // The webServer service may not exist yet when this row applies (the web
+    // stack boots asynchronously). Register the /canvas routes immediately
+    // when it does, otherwise wait for the service through cordis's
+    // inject-wait mechanism — otherwise /canvas/* falls through to the SPA
+    // fallback and the browser half fails to load the design list.
+    const tryRegister = () => {
+      let webServer;
+      try {
+        webServer = ctx.get("webServer");
+      } catch {
+        webServer = undefined;
+      }
+      if (webServer && typeof webServer.register === "function") {
+        disposeRoutes = registerCanvasRoutes(ctx, harness);
+        return true;
+      }
+      return false;
+    };
+    if (tryRegister()) {
+      if (ctx.logger) ctx.logger.info(`${name}: /canvas routes registered`);
+    } else {
+      ctx.inject(["webServer"], (ctx2) => {
+        ctx2.effect(() => registerCanvasRoutes(ctx2, harness), `${name}: /canvas routes`);
+      });
+      if (ctx.logger) ctx.logger.info(`${name}: webServer not ready yet — /canvas routes will register when it is`);
+    }
     if (ctx.logger) ctx.logger.info(`${name}: canvas-design-harness daemon client ready (port ${harness.port})`);
   } else if (ctx.logger) {
     ctx.logger.warn(`${name}: no bundled server found — daemon tools disabled`);
@@ -275,6 +470,9 @@ export function apply(ctx) {
     for (const watcher of watchers) watcher.close();
     for (const dispose of disposers.values()) {
       try { dispose(); } catch { /* best-effort teardown */ }
+    }
+    if (typeof disposeRoutes === "function") {
+      try { disposeRoutes(); } catch { /* best-effort teardown */ }
     }
     provideHarness?.();
     harness?.dispose();

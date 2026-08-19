@@ -5,6 +5,12 @@
   "license": "MIT",
   "type": "module",
   "main": "plugin.js",
+  "exports": {
+    ".": "./plugin.js",
+    "./host/tools-entry.js": "./host/tools-entry.js",
+    "./client": "./client/bundle.js",
+    "./package.json": "./package.json"
+  },
   "files": [
     "plugin.js",
     "host",
@@ -17,7 +23,7 @@
   "engines": {
     "node": ">=18"
   },
-  "peerDependencies": {
+  "dependencies": {
     "@deepseek-ai/dsh-tools": "^0.1.0-rc.6"
   },
   "repository": {
@@ -32,9 +38,21 @@
     "canvas",
     "design"
   ],
+  "scripts": {
+    "build:client": "node scripts/build-client.mjs",
+    "test": "node test/smoke.mjs"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
     }
   }
 }

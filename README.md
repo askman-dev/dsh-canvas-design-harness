@@ -73,20 +73,44 @@ node src/index.js <your-designs-folder>      # http://127.0.0.1:9321
 ## Test
 
 ```sh
-node test/smoke.mjs                 # A (7) + B (4) + C (7): skills, discovery, real daemon + tools bridge
+node test/smoke.mjs                 # Parts A–F: skills, discovery, daemon + tools, tab logic, /canvas routes E2E, webServer boot race
 cd .agents/skills/canvas-design-harness/server && node test/smoke.js   # Repo A self-test 17/17
 ```
 
-Part C spawns a REAL daemon on a random test port with a temp designs folder
-and exercises the full wrapper surface: workspace registration, file listing,
+Parts C/E spawn REAL daemons on random test ports with temp designs folders
+and exercise the full wrapper surface: workspace registration, file listing,
 tool registration (real `defineTool` schema compilation), createFile, batch
-(atomic page+frame+component), SSE update events, getDocument, validate.
+(atomic page+frame+component), SSE update events, getDocument, validate —
+plus the `/canvas/*` host routes over a real http server (Part E) and the
+webServer boot race where plugin.js applies before the web stack is ready
+(Part F).
+
+## Acceptance against the live GUI
+
+After changing host code (`plugin.js`) or the browser half, verify the running
+profile actually loads the plugin — don't eyeball it:
+
+```sh
+npm run build:client        # 1. regenerate client/bundle.js from client/design-view.js
+node test/smoke.mjs         # 2. offline suite (A–F)
+node scripts/verify-web.mjs # 3. LIVE checks: client entry in __DSH_BOOT__, bundle served,
+                            #    and — the one that catches the webServer boot race —
+                            #    GET /canvas/designs must return JSON, not the SPA index
+```
+
+`verify-web.mjs` needs the GUI to be up. Restart the profile from a **normal
+terminal** (not from inside the harness's sandboxed shell — a sandboxed
+relaunch cannot write `~/.dsh/profiles/web/cordis.yml` and fails with EPERM):
+
+```sh
+python3 scripts/restart-web.py    # kills the process on :3080, relaunches dsh --profile web detached, waits for readiness
+```
 
 ## Publish
 
 npm-publishable as `dsh-canvas-design-harness`; `files` ships `plugin.js`,
-`host/`, `cordis.patch.yml`, `.agents/skills`, and the README, so an installed
-bundle carries the whole skill tree and the daemon.
+`host/`, `client/`, `scripts/`, `cordis.patch.yml`, `.agents/skills`, and the
+README, so an installed bundle carries the whole skill tree and the daemon.
 
 ## Client half (DSH web GUI: 方案 A tabs)
 
@@ -95,18 +119,33 @@ Implemented in `client/`:
 - `client/logic.js` — pure tab-experience logic, **node-tested in Part D**:
   tab ids/order, `designsDirFor` (cwd → designs dir), SSE frame parsing,
   `node:selected` validation, click-to-ask draft text.
-- `client/design-view.js` — the browser half (dynamic-package source):
-  the `🗂️ 设计大厅` tab + per-file `🎨 <file>.html ✕` dynamic tabs on the
-  `conversation.view` ring, the gallery grid, the embedded canvas iframe
-  (`/open?file=`), and the postMessage click-to-ask bridge into the composer
-  draft. See `client/README.md` for the host RPC contract
-  (`harness.handle`: designsDirForSession / listDesigns / openUrl / setDraft /
-  subscribe) and verification status.
+- `client/design-view.js` — the browser half **source** (see
+  `client/README.md`): the `设计大厅` / `Design Gallery` tab on the
+  `conversation.view` ring (order 20, right of chat/trajectory), the gallery
+  grid, the embedded canvas viewer iframe, and the postMessage click-to-ask
+  bridge into the composer draft. All user-facing strings go through the DSH
+  locale service (zh/en dictionaries, `t(key, params)` interpolation — the
+  same pattern as `@deepseek-ai/dsh-client-ui-trajectory`), so the plugin is
+  bilingual. `scripts/build-client.mjs` wraps it into `client/bundle.js`, the
+  client module the DSH web shell actually loads (`dsh.client` web entry +
+  `exports["./client"]`, see `package.json`).
+- `plugin.js` — the host half of the tab: registers same-origin `/canvas/*`
+  routes on the harness web server. Registration waits for the `webServer`
+  service through cordis's inject-wait (`ctx.inject(["webServer"], ...)`),
+  because the web stack boots asynchronously and plugin.js can apply before
+  it — without the wait, `/canvas/*` falls through to the SPA fallback and
+  the tab shows the generic load error (this was the real-world bug behind
+  "无法加载设计稿列表"). Routes: `GET /canvas/designs` (session workspace →
+  designs dir → daemon file list, errors carry a stable `code` for the client
+  to localize), `GET /canvas/open` (302 to the daemon viewer), `GET
+  /canvas/events` (SSE proxy of daemon update events).
 
-**Verification split**: everything below the React layer is verified offline
-(32/32 wrapper smoke + Repo A 24/24 server self-test). The actual tab
-rendering against the live GUI requires the DSH web environment — mount the
-browser half and walk AC-01..AC-07 from the PRD manually.
+**Verification**: everything below the React layer is verified offline —
+smoke Parts A–F (Part E drives the `/canvas/*` routes against a real daemon
+over a real http server; Part F proves the webServer race fix) + Repo A 24/24
+server self-test. The tab's live rendering needs the DSH web GUI: restart the
+profile, run `scripts/verify-web.mjs`, and the tab appears on the conversation
+view ring (walk AC-01..AC-07 from the PRD).
 
 ## Sync from upstream (Repo A — single source)
 
