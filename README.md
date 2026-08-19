@@ -1,118 +1,159 @@
-# dsh-canvas-design-harness
+# Canvas Design Harness for DeepSeek Harness
 
-DeepSeek Harness 的**可视化画布设计插件**与**双规格 Skill 包**。
+English | [简体中文](./README.zh.md)
 
-为 DeepSeek Harness Web GUI 提供「设计大厅」多画板交互界面，同时支持在 Codex / Claude Code / 独立终端中作为通用 Skill 零依赖运行。
-
----
-
-## 🌟 核心特性
-
-- **🖼️ Web GUI「设计大厅」**：在 DSH 会话标签页中提供原生设计画廊，直观浏览工作区 `docs/designs/` 下的 HTML 多画板设计稿。
-- **💬 对话即设计**：在会话中直接向 Agent 描述产品界面需求，Agent 自动调用 `canvas_harness_*` 工具在工作区生成、排版与修改设计稿。
-- **🔄 守护进程与实时预览**：内置轻量级 HTTP-MCP 守护进程（`127.0.0.1:9321`），支持 iframe 画布预览、MCP 结构化修改与 SSE 热重载。
-- **🌐 原生双语支持**：接入 DSH `ctx.locale` 服务，提供完整的中文与英文自适应界面。
-- **🔌 双规格支持 (Dual-Spec)**：
-  - **DeepSeek Harness 插件**：通过 `dsh.bundle.patch` 与 `dsh.client` 深度接入 DSH 宿主与前端；
-  - **Codex / Claude Code Skill**：单例引擎位于 `.agents/skills/canvas-design-harness`，可无缝脱离 DSH 独立使用。
+> 🎨 **Interactive Figma-style canvas design plugin & dual-spec Skill for DeepSeek Harness.**
+> Create, inspect, and iterate on multi-frame UI designs directly inside DeepSeek Harness Web GUI, while remaining 100% standalone for Codex, Claude Code, and terminal workflows.
 
 ---
 
-## 🚀 快速开始
+## 📸 Visual Overview
 
-### 1. 安装到 DeepSeek Harness
+<details open>
+  <summary><b>🖼️ 1. Design Gallery (Grid Overview)</b> — Browse all workspace design documents</summary>
+  <br/>
+  <a href="./docs/assets/gallery-grid.png">
+    <img src="./docs/assets/gallery-grid.png" alt="Design Gallery Grid" width="100%" style="border-radius: 8px; border: 1px solid rgba(0,0,0,0.1);" />
+  </a>
+</details>
+
+<details>
+  <summary><b>🎨 2. Multi-Frame Canvas (Grok Mobile App)</b> — Infinite canvas with responsive device frames</summary>
+  <br/>
+  <a href="./docs/assets/canvas-viewer-grok.png">
+    <img src="./docs/assets/canvas-viewer-grok.png" alt="Multi-Frame Canvas View" width="100%" style="border-radius: 8px; border: 1px solid rgba(0,0,0,0.1);" />
+  </a>
+</details>
+
+<details>
+  <summary><b>📊 3. Living Specs (AI Apps Comparison)</b> — Multi-page design specs version-controlled in Git</summary>
+  <br/>
+  <a href="./docs/assets/canvas-viewer-comparison.png">
+    <img src="./docs/assets/canvas-viewer-comparison.png" alt="Living Specs Canvas View" width="100%" style="border-radius: 8px; border: 1px solid rgba(0,0,0,0.1);" />
+  </a>
+</details>
+
+---
+
+## 🌟 Key Highlights
+
+### 1. Integrated "Design Gallery" in DeepSeek Harness UI
+- Seamlessly mounts into the `conversation.view` tab ring (alongside Chat and Trajectory).
+- Instant visual gallery of all design documents located in `docs/designs/`.
+- Embedded full-height interactive viewer with zoom, pan, and real-time hot-reloading.
+
+### 2. HTML as Universal Living Specifications
+- **Human-Friendly**: Clean, readable HTML files (`docs/designs/*.html`). Double-click to open in any standard web browser without heavy proprietary design software.
+- **AI-Friendly**: Standard semantic DOM structure. LLMs can inspect, generate, and perform atomic mutations on frames and components with 100% precision.
+- **Git-Native Specs**: Design files live right in your repository as code. Commit, branch, diff, and review living design specifications alongside your application code.
+
+### 3. Figma-Like Interactive Canvas Experience
+- Multi-page document architecture with infinite pan/zoom canvas.
+- Built-in device frame presets (Mobile, Desktop, Modals, Flow diagrams).
+- Zero-dependency built-in HTTP-MCP daemon (`127.0.0.1:9321`) handles live synchronization and SVG exports.
+
+### 4. Dual-Spec Package
+- **DeepSeek Harness Plugin**: Declares `dsh.bundle.patch` & `dsh.client` for complete host-and-client GUI integration.
+- **Codex / Claude Code Skill**: Self-contained skill engine at `.agents/skills/canvas-design-harness/`, ready to run standalone.
+
+---
+
+## 🚀 Quick Start
+
+### 1. Install as a DeepSeek Harness Plugin
 
 ```sh
-# 添加为 DSH 插件
+# Add plugin to the web profile
 dsh plugin --profile web add /path/to/dsh-canvas-design-harness
 
-# 在普通终端重启 Web profile
+# Restart the web profile from a regular terminal
 python3 scripts/restart-web.py
 ```
 
-刷新浏览器页面（`http://127.0.0.1:3080`），即可在会话右上角看到「**设计大厅**」Tab。
+Refresh your browser (`http://127.0.0.1:3080`), and you will see the **Design Gallery** (`设计大厅`) tab in the top navigation ring.
 
-### 2. 使用方法
+### 2. Conversational Design Generation
 
-1. **通过对话生成设计稿**：在会话中对 Agent 描述需求，例如：
-   > *“帮我设计一个用户登录与注册界面的设计稿”*
-2. **在设计大厅查看**：Agent 将自动在当前工作区的 `docs/designs/` 目录下生成 `.html` 设计稿，点击「设计大厅」即可看到卡片列表。
-3. **进入画布**：点击任意设计稿卡片即可在全屏内嵌画布中查看 Figma 级多画板排版。
+1. **Describe your UI in chat**:
+   > *"Design a user login and registration interface for me with mobile screens"*
+2. **Automatic Generation**: The Agent invokes `canvas_harness_*` tools to generate and render design files under `docs/designs/`.
+3. **Inspect in Design Gallery**: Open the **Design Gallery** tab to view your interactive canvas.
 
 ---
 
-## 🏗️ 仓库结构
+## 🏗️ Repository Layout
 
 ```
 dsh-canvas-design-harness/
-├── .agents/skills/canvas-design-harness/   # 标准 Skill 引擎 (与 upstream 同步)
-│   ├── SKILL.md       # 技能指令规范
-│   ├── reference/     # 画布样式与交互脚本 (canvas-frames.css / canvas-frames.js)
-│   ├── server/        # 零依赖 HTTP-MCP 守护进程
-│   └── specs/         # 协议规范 (design_harness.yaml / external_capabilities.yaml)
-├── client/            # DSH Web 前端模块
-│   ├── design-view.js # 前端组件源码 (React + DSH 原生 locale)
-│   ├── bundle.js      # 构建后的 classic-script bundle
-│   └── logic.js       # 纯逻辑与测试辅助
-├── host/              # 宿主工具桥接
-│   ├── tools.js       # 原生模型工具定义 (canvas_harness_*)
-│   └── tools-entry.js # DSH tools 注入入口
-├── scripts/           # 构建、验收与维护工具
-│   ├── build-client.mjs  # 客户端 bundle 打包脚本
-│   ├── restart-web.py    # 宿主安全的守护化重启脚本
-│   ├── verify-web.mjs    # 针对实时 GUI 的自动化验收脚本
-│   └── sync-from-upstream.sh # 上游技能引擎同步脚本
-├── plugin.js          # DSH 插件入口 (技能注册、daemon 调度、/canvas/* 路由)
-├── package.json       # 插件清单 (声明 dsh.bundle.patch 与 dsh.client)
-├── cordis.patch.yml   # Cordis profile 补丁声明
-└── test/smoke.mjs     # 42 项离线集成测试套件 (Parts A~F)
+├── .agents/skills/canvas-design-harness/   # Canonical skill engine (synced from upstream)
+│   ├── SKILL.md       # Skill definition & guidelines
+│   ├── reference/     # Canonical styles & scripts (canvas-frames.css / canvas-frames.js)
+│   ├── server/        # Zero-dependency HTTP-MCP daemon (port 9321)
+│   └── specs/         # Protocol specifications
+├── client/            # DSH Web GUI client module
+│   ├── design-view.js # React frontend source (DSH locale & Design System)
+│   ├── bundle.js      # Built classic-script bundle (__ModuleLoader__)
+│   └── logic.js       # Pure logic & testing helpers
+├── host/              # Host tools bridge
+│   ├── tools.js       # Model tool bridge definitions (canvas_harness_*)
+│   └── tools-entry.js # Cordis tool registration entry
+├── scripts/           # Build, verification & maintenance scripts
+│   ├── build-client.mjs  # Bundle packaging script
+│   ├── restart-web.py    # Sandbox-safe profile restarter
+│   ├── verify-web.mjs    # Live GUI acceptance test script
+│   └── sync-from-upstream.sh # Upstream skill synchronization
+├── docs/assets/       # Visual preview screenshots
+├── plugin.js          # DSH plugin entry (skills, daemon lifecycle, /canvas/* routes)
+├── package.json       # Manifest declaring dsh.bundle.patch & dsh.client
+├── cordis.patch.yml   # Cordis profile patch configuration
+└── test/smoke.mjs     # 42-check offline integration test suite (Parts A–F)
 ```
 
 ---
 
-## 🛠️ 宿主能力与工具清单
+## 🛠️ Model Tools Bridge
 
-插件通过 `ctx.canvasHarness` 与 `ctx.tools` 注册了以下模型工具（统一以 `root` + `name` 寻址）：
+The plugin exposes the following structured tools to the AI model (addressed by `root` + `name`):
 
-| 工具名称 | 功能说明 | 对应 MCP 方法 |
+| Tool | Purpose | MCP Method |
 |---|---|---|
-| `canvas_harness_ensure_workspace` | 探测/启动守护进程并注册工作区 | `POST /workspaces` |
-| `canvas_harness_list_designs` | 列出工作区目录下的所有设计稿 | `workspace.listFiles` |
-| `canvas_harness_create_design` | 在工作区新建设计稿 HTML | `document.createFile` |
-| `canvas_harness_get_document` | 读取并解析设计稿的节点树 | `document.getDocument` |
-| `canvas_harness_batch` | 原子执行一组页面/画板/组件操作 | `batch` |
-| `canvas_harness_validate` | 校验设计稿结构与规范 | `document.validate` |
-| `canvas_harness_screenshot` | 无浏览器渲染为 SVG 图片 | `node.getScreenshot` |
-| `canvas_harness_mcp_call` | 原始 MCP JSON-RPC 调用逃生口 | `tools/call` |
+| `canvas_harness_ensure_workspace` | Probe/spawn daemon & register workspace | `POST /workspaces` |
+| `canvas_harness_list_designs` | List all `.html` designs in workspace | `workspace.listFiles` |
+| `canvas_harness_create_design` | Create a new design HTML document | `document.createFile` |
+| `canvas_harness_get_document` | Read and parse the document node tree | `document.getDocument` |
+| `canvas_harness_batch` | Atomically apply batch operations on frames/components | `batch` |
+| `canvas_harness_validate` | Validate document structure and frames | `document.validate` |
+| `canvas_harness_screenshot` | Render frames to SVG without a browser | `node.getScreenshot` |
+| `canvas_harness_mcp_call` | Raw MCP JSON-RPC escape hatch | `tools/call` |
 
 ---
 
-## 💻 开发者与验收指南
+## 💻 Development & Acceptance
 
-修改代码后，请按以下三步标准流程进行验收：
+Run the three-step acceptance suite after making any changes:
 
 ```sh
-# 1. 重新构建客户端 Bundle
+# 1. Rebuild the client bundle
 npm run build:client
 
-# 2. 运行 42 项离线测试套件 (A 技能 / B 发现 / C 工具 / D 逻辑 / E 路由 / F 启动竞态)
+# 2. Run the 42-check offline test suite (Skills, Discovery, Daemon, E2E Routes, Boot Race)
 node test/smoke.mjs
 
-# 3. 对运行中的 Web GUI 运行实时验收
+# 3. Verify against the live running Web GUI
 node scripts/verify-web.mjs
 ```
 
-### 独立运行 Skill 引擎 (Codex / Claude Code)
+### Standalone Skill (Codex / Claude Code)
 
-本技能不强依赖 DSH，可直接在终端中独立启动守护进程：
+The skill can also run independently without DeepSeek Harness:
 
 ```sh
 cd .agents/skills/canvas-design-harness/server
-node src/index.js <your-designs-folder>      # 默认监听 http://127.0.0.1:9321
+node src/index.js <your-designs-folder>      # Defaults to http://127.0.0.1:9321
 ```
 
 ---
 
-## 📄 开源许可
+## 📄 License
 
 [MIT License](LICENSE)

@@ -16,9 +16,11 @@
     "host",
     "client",
     "scripts",
+    "docs",
     "cordis.patch.yml",
     ".agents/skills",
-    "README.md"
+    "README.md",
+    "README.zh.md"
   ],
   "engines": {
     "node": ">=18"
