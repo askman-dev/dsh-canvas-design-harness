@@ -1,158 +1,118 @@
 # dsh-canvas-design-harness
 
-Repo B of the two-repo split. Repo A is the engine
-(`canvas-design-harness` skill: SKILL.md + reference/ + server/ + specs/),
-this repo is the **DSH wrapper**: it makes Repo A's external capabilities
-native to DeepSeek Harness while the skill keeps working standalone in
-Codex / Claude Code / a bare terminal.
+DeepSeek Harness 的**可视化画布设计插件**与**双规格 Skill 包**。
 
-One skill tree, two plugin specs:
+为 DeepSeek Harness Web GUI 提供「设计大厅」多画板交互界面，同时支持在 Codex / Claude Code / 独立终端中作为通用 Skill 零依赖运行。
 
-- **Codex / Claude Code spec** — the skill lives at `.agents/skills/canvas-design-harness/`.
-  Any agent that scans `.agents/skills` picks it up with zero setup; the
-  bundled server runs standalone (`node server/src/index.js <folder>`).
-- **DeepSeek Harness plugin spec** — this repo is a DSH plugin *bundle*:
-  `package.json` declares `dsh.bundle.patch`; `cordis.patch.yml` inserts two
-  host-side rows; `plugin.js` registers skills AND the daemon lifecycle
-  service; `host/tools-entry.js` registers the MCP tools bridge.
+---
 
-## What the wrapper adds on top of the skill
+## 🌟 核心特性
 
-| Capability | Mechanism | Spec (Repo A) |
-|---|---|---|
-| Skills in the catalog from any workspace | `ctx.skills.register` (rank 250, hot reload) | — |
-| Daemon lifecycle: probe → attach → spawn singleton on 127.0.0.1:9321 | `createCanvasHarness()` → `ctx.canvasHarness` (provided service) | `design_harness_external_process` |
-| Workspace registration + file listing | `harness.ensureWorkspace(root)` / `listFiles(root)` | `design_harness_external_http` / `_file_identity` |
-| Native model tools (`canvas_harness_*`) | `host/tools.js` + `ctx.tools.register` via `defineTool` | `design_harness_external_mcp` |
-| Live change events | `harness.events(fileId, cb)` (SSE) | `design_harness_external_events` |
-| (roadmap) GUI gallery + dynamic file tabs | client half, `conversation.view` slot | `design_harness_external_viewer_bridge` |
+- **🖼️ Web GUI「设计大厅」**：在 DSH 会话标签页中提供原生设计画廊，直观浏览工作区 `docs/designs/` 下的 HTML 多画板设计稿。
+- **💬 对话即设计**：在会话中直接向 Agent 描述产品界面需求，Agent 自动调用 `canvas_harness_*` 工具在工作区生成、排版与修改设计稿。
+- **🔄 守护进程与实时预览**：内置轻量级 HTTP-MCP 守护进程（`127.0.0.1:9321`），支持 iframe 画布预览、MCP 结构化修改与 SSE 热重载。
+- **🌐 原生双语支持**：接入 DSH `ctx.locale` 服务，提供完整的中文与英文自适应界面。
+- **🔌 双规格支持 (Dual-Spec)**：
+  - **DeepSeek Harness 插件**：通过 `dsh.bundle.patch` 与 `dsh.client` 深度接入 DSH 宿主与前端；
+  - **Codex / Claude Code Skill**：单例引擎位于 `.agents/skills/canvas-design-harness`，可无缝脱离 DSH 独立使用。
 
-The model-facing tool surface is stable: every `canvas_harness_*` tool takes a
-workspace `root` and a design `name` — never a server fileId (file ids churn
-across rescans, spec `design_harness_external_file_identity`); the bridge
-resolves (root, name) → fileId internally.
+---
 
-## Layout
+## 🚀 快速开始
+
+### 1. 安装到 DeepSeek Harness
+
+```sh
+# 添加为 DSH 插件
+dsh plugin --profile web add /path/to/dsh-canvas-design-harness
+
+# 在普通终端重启 Web profile
+python3 scripts/restart-web.py
+```
+
+刷新浏览器页面（`http://127.0.0.1:3080`），即可在会话右上角看到「**设计大厅**」Tab。
+
+### 2. 使用方法
+
+1. **通过对话生成设计稿**：在会话中对 Agent 描述需求，例如：
+   > *“帮我设计一个用户登录与注册界面的设计稿”*
+2. **在设计大厅查看**：Agent 将自动在当前工作区的 `docs/designs/` 目录下生成 `.html` 设计稿，点击「设计大厅」即可看到卡片列表。
+3. **进入画布**：点击任意设计稿卡片即可在全屏内嵌画布中查看 Figma 级多画板排版。
+
+---
+
+## 🏗️ 仓库结构
 
 ```
 dsh-canvas-design-harness/
-├── .agents/skills/canvas-design-harness/   # verbatim skill (Repo A content)
-│   ├── SKILL.md
-│   ├── reference/     # canvas-frames.css / canvas-frames.js
-│   ├── server/        # zero-dependency HTTP-MCP service (canvas-design-harness-server)
-│   └── specs/         # design_harness.yaml + external_capabilities.yaml (the protocol)
-├── package.json       # DSH bundle manifest (dsh.bundle.patch)
-├── cordis.patch.yml   # inserts row 1 (plugin.js) + row 2 (host/tools-entry.js)
-├── plugin.js          # skills registration + ctx.canvasHarness daemon service
-├── host/
-│   ├── tools.js       # pure tools-bridge logic (no @deepseek-ai imports, testable)
-│   └── tools-entry.js # harness-facing entry wiring @deepseek-ai/dsh-tools defineTool
-└── test/smoke.mjs     # offline smoke: A skills, B filesystem discovery, C daemon+tools
+├── .agents/skills/canvas-design-harness/   # 标准 Skill 引擎 (与 upstream 同步)
+│   ├── SKILL.md       # 技能指令规范
+│   ├── reference/     # 画布样式与交互脚本 (canvas-frames.css / canvas-frames.js)
+│   ├── server/        # 零依赖 HTTP-MCP 守护进程
+│   └── specs/         # 协议规范 (design_harness.yaml / external_capabilities.yaml)
+├── client/            # DSH Web 前端模块
+│   ├── design-view.js # 前端组件源码 (React + DSH 原生 locale)
+│   ├── bundle.js      # 构建后的 classic-script bundle
+│   └── logic.js       # 纯逻辑与测试辅助
+├── host/              # 宿主工具桥接
+│   ├── tools.js       # 原生模型工具定义 (canvas_harness_*)
+│   └── tools-entry.js # DSH tools 注入入口
+├── scripts/           # 构建、验收与维护工具
+│   ├── build-client.mjs  # 客户端 bundle 打包脚本
+│   ├── restart-web.py    # 宿主安全的守护化重启脚本
+│   ├── verify-web.mjs    # 针对实时 GUI 的自动化验收脚本
+│   └── sync-from-upstream.sh # 上游技能引擎同步脚本
+├── plugin.js          # DSH 插件入口 (技能注册、daemon 调度、/canvas/* 路由)
+├── package.json       # 插件清单 (声明 dsh.bundle.patch 与 dsh.client)
+├── cordis.patch.yml   # Cordis profile 补丁声明
+└── test/smoke.mjs     # 42 项离线集成测试套件 (Parts A~F)
 ```
 
-## Install as a DSH plugin
+---
+
+## 🛠️ 宿主能力与工具清单
+
+插件通过 `ctx.canvasHarness` 与 `ctx.tools` 注册了以下模型工具（统一以 `root` + `name` 寻址）：
+
+| 工具名称 | 功能说明 | 对应 MCP 方法 |
+|---|---|---|
+| `canvas_harness_ensure_workspace` | 探测/启动守护进程并注册工作区 | `POST /workspaces` |
+| `canvas_harness_list_designs` | 列出工作区目录下的所有设计稿 | `workspace.listFiles` |
+| `canvas_harness_create_design` | 在工作区新建设计稿 HTML | `document.createFile` |
+| `canvas_harness_get_document` | 读取并解析设计稿的节点树 | `document.getDocument` |
+| `canvas_harness_batch` | 原子执行一组页面/画板/组件操作 | `batch` |
+| `canvas_harness_validate` | 校验设计稿结构与规范 | `document.validate` |
+| `canvas_harness_screenshot` | 无浏览器渲染为 SVG 图片 | `node.getScreenshot` |
+| `canvas_harness_mcp_call` | 原始 MCP JSON-RPC 调用逃生口 | `tools/call` |
+
+---
+
+## 💻 开发者与验收指南
+
+修改代码后，请按以下三步标准流程进行验收：
 
 ```sh
-dsh plugin --profile web add /path/to/dsh-canvas-design-harness
+# 1. 重新构建客户端 Bundle
+npm run build:client
+
+# 2. 运行 42 项离线测试套件 (A 技能 / B 发现 / C 工具 / D 逻辑 / E 路由 / F 启动竞态)
+node test/smoke.mjs
+
+# 3. 对运行中的 Web GUI 运行实时验收
+node scripts/verify-web.mjs
 ```
 
-Then restart the profile. On boot the wrapper registers the skill in the
-catalog (`skill` tool / `/canvas-design-harness`), provides
-`ctx.canvasHarness`, and adds the `canvas_harness_*` tools to the model.
+### 独立运行 Skill 引擎 (Codex / Claude Code)
 
-## Use from Codex / Claude Code (Repo A standalone)
-
-The skill has no dependency on DSH. Point your agent at
-`.agents/skills/canvas-design-harness`, or run the server directly:
+本技能不强依赖 DSH，可直接在终端中独立启动守护进程：
 
 ```sh
 cd .agents/skills/canvas-design-harness/server
-node src/index.js <your-designs-folder>      # http://127.0.0.1:9321
+node src/index.js <your-designs-folder>      # 默认监听 http://127.0.0.1:9321
 ```
 
-## Test
+---
 
-```sh
-node test/smoke.mjs                 # Parts A–F: skills, discovery, daemon + tools, tab logic, /canvas routes E2E, webServer boot race
-cd .agents/skills/canvas-design-harness/server && node test/smoke.js   # Repo A self-test 17/17
-```
+## 📄 开源许可
 
-Parts C/E spawn REAL daemons on random test ports with temp designs folders
-and exercise the full wrapper surface: workspace registration, file listing,
-tool registration (real `defineTool` schema compilation), createFile, batch
-(atomic page+frame+component), SSE update events, getDocument, validate —
-plus the `/canvas/*` host routes over a real http server (Part E) and the
-webServer boot race where plugin.js applies before the web stack is ready
-(Part F).
-
-## Acceptance against the live GUI
-
-After changing host code (`plugin.js`) or the browser half, verify the running
-profile actually loads the plugin — don't eyeball it:
-
-```sh
-npm run build:client        # 1. regenerate client/bundle.js from client/design-view.js
-node test/smoke.mjs         # 2. offline suite (A–F)
-node scripts/verify-web.mjs # 3. LIVE checks: client entry in __DSH_BOOT__, bundle served,
-                            #    and — the one that catches the webServer boot race —
-                            #    GET /canvas/designs must return JSON, not the SPA index
-```
-
-`verify-web.mjs` needs the GUI to be up. Restart the profile from a **normal
-terminal** (not from inside the harness's sandboxed shell — a sandboxed
-relaunch cannot write `~/.dsh/profiles/web/cordis.yml` and fails with EPERM):
-
-```sh
-python3 scripts/restart-web.py    # kills the process on :3080, relaunches dsh --profile web detached, waits for readiness
-```
-
-## Publish
-
-npm-publishable as `dsh-canvas-design-harness`; `files` ships `plugin.js`,
-`host/`, `client/`, `scripts/`, `cordis.patch.yml`, `.agents/skills`, and the
-README, so an installed bundle carries the whole skill tree and the daemon.
-
-## Client half (DSH web GUI: 方案 A tabs)
-
-Implemented in `client/`:
-
-- `client/logic.js` — pure tab-experience logic, **node-tested in Part D**:
-  tab ids/order, `designsDirFor` (cwd → designs dir), SSE frame parsing,
-  `node:selected` validation, click-to-ask draft text.
-- `client/design-view.js` — the browser half **source** (see
-  `client/README.md`): the `设计大厅` / `Design Gallery` tab on the
-  `conversation.view` ring (order 20, right of chat/trajectory), the gallery
-  grid, the embedded canvas viewer iframe, and the postMessage click-to-ask
-  bridge into the composer draft. All user-facing strings go through the DSH
-  locale service (zh/en dictionaries, `t(key, params)` interpolation — the
-  same pattern as `@deepseek-ai/dsh-client-ui-trajectory`), so the plugin is
-  bilingual. `scripts/build-client.mjs` wraps it into `client/bundle.js`, the
-  client module the DSH web shell actually loads (`dsh.client` web entry +
-  `exports["./client"]`, see `package.json`).
-- `plugin.js` — the host half of the tab: registers same-origin `/canvas/*`
-  routes on the harness web server. Registration waits for the `webServer`
-  service through cordis's inject-wait (`ctx.inject(["webServer"], ...)`),
-  because the web stack boots asynchronously and plugin.js can apply before
-  it — without the wait, `/canvas/*` falls through to the SPA fallback and
-  the tab shows the generic load error (this was the real-world bug behind
-  "无法加载设计稿列表"). Routes: `GET /canvas/designs` (session workspace →
-  designs dir → daemon file list, errors carry a stable `code` for the client
-  to localize), `GET /canvas/open` (302 to the daemon viewer), `GET
-  /canvas/events` (SSE proxy of daemon update events).
-
-**Verification**: everything below the React layer is verified offline —
-smoke Parts A–F (Part E drives the `/canvas/*` routes against a real daemon
-over a real http server; Part F proves the webServer race fix) + Repo A 24/24
-server self-test. The tab's live rendering needs the DSH web GUI: restart the
-profile, run `scripts/verify-web.mjs`, and the tab appears on the conversation
-view ring (walk AC-01..AC-07 from the PRD).
-
-## Sync from upstream (Repo A — single source)
-
-The ENGINE (SKILL.md, reference/, server/, specs/) is owned by Repo A (the
-Codex skill) and copied here VERBATIM — there is only one implementation.
-Re-sync and re-test both sides with:
-
-```sh
-scripts/sync-from-upstream.sh [upstream-skill-dir]
-```
+[MIT License](LICENSE)

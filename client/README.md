@@ -1,74 +1,40 @@
-# client/ — DSH web GUI half (方案 A: gallery)
+# client/ — DSH Web GUI 模块
 
-This directory is the **browser half** of the wrapper. The DSH web shell
-mounts it as a **client module**: `scripts/build-client.mjs` wraps
-`design-view.js` into `bundle.js`, a classic script that registers a factory
-via `window.__ModuleLoader__.load({ id, factory })`. The factory body requires
-only platform static-table specifiers (`react`, ...) and exports the cordis
-client plugin face (`inject` / `apply`).
+本目录是 `dsh-canvas-design-harness` 插件的**浏览器端实现**，挂载到 DeepSeek Harness Web GUI 的 `conversation.view` 标签页环中。
 
-## Files
+---
 
-- `logic.js` — **pure, node-tested** logic (Part D of test/smoke.mjs):
-  tab ids, tab order, `designsDirFor` (cwd → designs dir), SSE frame parsing,
-  node:selected message validation, click-to-ask draft text.
-- `design-view.js` — the browser-half **source** (see header comment).
-  Small helpers are inlined from `logic.js` because the browser half cannot
-  import; keep them in sync (Part D tests the canonical copy in `logic.js`).
-- `bundle.js` — **generated** client module (do not edit; `npm run
-  build:client`).
+## 📁 文件结构
 
-## Host contract (same-origin HTTP routes on `ctx.webServer`, see plugin.js)
+- `design-view.js` — **浏览器端组件源码**：
+  - 基于 React + DSH 原生 Design System 变量体系开发；
+  - 接入 DSH 原生 `ctx.locale` 服务（zh / en 双语自适应）；
+  - 实现设计稿画廊（Card Grid）、空态引导卡片及内嵌画布查看器（iframe）。
+- `bundle.js` — **构建产物**（请勿直接编辑，由 `npm run build:client` 生成）：
+  - 包装为 DSH `@deepseek-ai/dsh-client-modules` 规范的经典脚本，通过 `window.__ModuleLoader__.load({ id, factory })` 注册。
+- `logic.js` — **纯逻辑函数**：
+  - 提供设计稿目录映射（`designsDirFor`）、Tab 标识生成、SSE 帧解析等无副作用辅助函数，供 `test/smoke.mjs`（Part D）离线测试。
 
-| route | args → result | backed by |
+---
+
+## 🔌 宿主通信路由 (Host Routes)
+
+前端组件通过同源 HTTP 路由与宿主 `plugin.js`（基于 `ctx.webServer`）通信：
+
+| 路由地址 | 请求方式 | 作用与参数 |
 |---|---|---|
-| `GET /canvas/designs` | `?sessionId=&root=` → `{ ok, root, base, files }` | workspace registry + `client/logic.js` `designsDirFor` + `ctx.canvasHarness.listFiles` |
-| `GET /canvas/open` | `?file=` → 302 to the daemon viewer | `ctx.canvasHarness.openUrl(fileId)` |
-| `GET /canvas/events` | `?file=` → SSE proxy (open/updated) | `ctx.canvasHarness.events(fileId, cb)` |
+| `/canvas/designs` | `GET` | `?sessionId=&root=`：解析当前会话工作区，调用守护进程返回设计稿列表 |
+| `/canvas/open` | `GET` | `?file=<fileId>`：302 重定向至守护进程的 HTML 查看器页面 |
+| `/canvas/events` | `GET` | `?file=<fileId>`：SSE 实时事件流代理（推送文件更新事件） |
 
-`DesignFile` follows Repo A's metadata contract: `{ id, name, relPath,
-pageCount, frameCount, updatedAt, workspaceId }`.
+---
 
-## Verification status
+## 🛠️ 构建与测试
 
-- **Offline-verified** (test/smoke.mjs): tab id/order math, designs-dir
-  mapping, SSE frame parsing, node:selected validation, draft text — against
-  the REAL daemon protocol (Repo A 24/24 + wrapper A–E; Part E drives the
-  `/canvas/*` host routes over a real http server + real daemon).
-- **Requires the DSH web GUI** (not runnable in this repo's offline test):
-  the actual tab rendering and slot registration against the live
-  `conversation.view` ring. Install the bundle, restart the profile, then walk
-  AC-01..AC-07 from the PRD.
+```sh
+# 重新打包客户端 bundle
+npm run build:client
 
-## Mounting
-
-The browser half ships inside this npm package as a **DSH client module**:
-
-- `package.json` declares `dsh.client` (`platform: "web"`, inject:
-  `@deepseek-ai/dsh-client-locale` / `-runtime` / `-ui-conversation`) and
-  `exports["./client"]` → `client/bundle.js`. The Node half of
-  `@deepseek-ai/dsh-client-modules` scans enabled Loader entries for `dsh.client`
-  packages, hashes the built bundle into `window.__DSH_BOOT__`, and serves it
-  at `/plugins/<id>/client.js`.
-- `client/bundle.js` is a classic script registering a factory via
-  `window.__ModuleLoader__.load({ id, factory })`. The factory body
-  (`client/design-view.js`) requires only the platform static table
-  (`react`, ...) and exports the cordis client plugin face
-  (`inject: ["slots", "sessions", "locale"]`, `apply`), which registers the
-  `设计大厅` entry on the `conversation.view` slot ring.
-- Rebuild after editing the source: `npm run build:client` (wraps
-  `client/design-view.js` into `client/bundle.js`).
-
-The browser half talks to the host half over **same-origin HTTP routes**
-registered by `plugin.js` on `ctx.webServer` (lazily acquired, so the plugin
-still loads in bare cordis contexts):
-
-| route | purpose | backed by |
-|---|---|---|
-| `GET /canvas/designs?sessionId=&root=` | design file list + daemon base | `ctx.canvasHarness.listFiles(designsDirFor(workspace.path))` |
-| `GET /canvas/open?file=` | 302 to the daemon viewer | `ctx.canvasHarness.openUrl(fileId)` |
-| `GET /canvas/events?file=` | SSE proxy of daemon update events | `ctx.canvasHarness.events(fileId, cb)` |
-
-The click-to-ask bridge (`node:selected` postMessage) sets the composer draft
-client-side via the conversation standard kit:
-`ctx.sessions.provideInfo(sessionId).props.inputActions.setDraft(text)`.
+# 运行包含前端纯逻辑测试的完整套件
+node test/smoke.mjs
+```
