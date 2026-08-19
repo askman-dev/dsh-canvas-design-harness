@@ -1,0 +1,1577 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gemini-app</title>
+<style>/* Canvas card-conversation frame kit
+ * Canonical shared styles for Figma-style screen reproductions.
+ * Embed a copy into each visualization fragment so it renders standalone.
+ */
+#canvas-frames-demo {
+  --cf-bg: #F7F9FC;
+  --cf-surface: #FFFFFF;
+  --cf-sheet: #FAFCFF;
+  --cf-ink: #141A22;
+  --cf-ink-2: #667085;
+  --cf-ink-3: #526071;
+  --cf-line: #E1E8F0;
+  --cf-line-2: #DCE5EF;
+  --cf-accent: #176FF2;
+  --cf-accent-soft: #E9F3FF;
+  --cf-math: #3478D4;
+  --cf-primary: #37797C;
+  --cf-field: #F8FAFC;
+  --cf-transcript-a: #EFF5FC;
+  --cf-transcript-b: #F8FAFF;
+  --cf-process: #F7F9FC;
+  --cf-process-line: #E3E8EF;
+  --cf-chip: #F0F3F7;
+  --cf-muted: #8A94A3;
+  --cf-shadow: 0 18px 40px rgba(23, 53, 83, .14);
+  --cf-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-family: var(--cf-font);
+  color: var(--cf-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+#canvas-frames-demo * { box-sizing: border-box; }
+
+/* Figma-like toolbar and tab system */
+.cf-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 20px;
+  font-size: 13px;
+  color: var(--cf-ink-2);
+}
+.cf-toolbar-title { font-weight: 700; font-size: 14px; color: var(--cf-ink); }
+.cf-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.cf-tab {
+  appearance: none;
+  border: 1px solid #D8DEE6;
+  background: var(--cf-surface);
+  color: var(--cf-ink-2);
+  border-radius: 999px;
+  padding: 6px 13px;
+  font: 600 12.5px var(--cf-font);
+  cursor: pointer;
+}
+.cf-tab:hover { border-color: var(--cf-accent); color: var(--cf-accent); }
+.cf-tab.is-active {
+  background: var(--cf-accent);
+  border-color: var(--cf-accent);
+  color: #fff;
+}
+
+/* Figma-like pages (each page owns frames on its own canvas) */
+.cf-pagetabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cf-pagetab {
+  appearance: none;
+  border: 1px solid #D8DEE6;
+  background: var(--cf-surface);
+  color: var(--cf-ink-2);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font: 600 12.5px var(--cf-font);
+  cursor: pointer;
+}
+.cf-pagetab:hover { border-color: var(--cf-accent); color: var(--cf-accent); }
+.cf-pagetab.is-active {
+  background: var(--cf-accent);
+  border-color: var(--cf-accent);
+  color: #fff;
+}
+.cf-page { display: none; }
+.cf-page.is-active { display: block; }
+
+.cf-canvas {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 56px;
+  padding: 80px;
+  width: max-content;
+}
+
+/* Figma-like infinite canvas stage */
+.cf-stage {
+  position: relative;
+  width: 100%;
+  height: calc(100dvh - 130px);
+  min-height: 480px;
+  border: 1px solid #D8DEE6;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #EFF2F6;
+  background-image: radial-gradient(#D5DCE4 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+/* The canvas is a stable, full-area viewport: it never shrinks with zoom,
+ * so the pointer hit area stays large. Content scales inside it. */
+.cf-canvas-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.cf-canvas-viewport.is-panning { cursor: grabbing; }
+.cf-canvas-inner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.cf-zoombar {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, .94);
+  border: 1px solid #D8DEE6;
+  border-radius: 10px;
+  padding: 4px 6px;
+  box-shadow: 0 4px 14px rgba(23, 53, 83, .10);
+  z-index: 10;
+}
+.cf-zoombar button {
+  width: 28px;
+  height: 26px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: #344054;
+  font: 600 14px var(--cf-font);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.cf-zoombar button:hover { background: #EAF1FA; }
+.cf-zoom-value {
+  min-width: 48px;
+  text-align: center;
+  font: 600 11.5px var(--cf-font);
+  color: var(--cf-ink-2);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.cf-zoom-fit {
+  width: auto !important;
+  padding: 0 8px;
+  font-size: 11.5px !important;
+}
+
+/* Launch-sheet internal states (same panel, no navigation) */
+.cf-sheet.cf-ls {
+  top: auto;
+  height: auto;
+  max-height: calc(100% - 92px);
+}
+.cf-sheet.cf-ls .cf-close { position: static; flex: none; }
+.cf-sheet.cf-ls .cf-launch-title { font-size: 18px; }
+.cf-sheet.cf-ls .cf-cat { display: none; }
+.cf-ls-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.cf-ls-header .cf-ls-back { margin-right: auto; margin-top: 0; }
+.cf-ls-state { display: none; flex-direction: column; min-height: 0; }
+.cf-ls-state.is-active { display: flex; }
+.cf-ls-intro.is-collapsed { display: none; }
+.cf-ls-toggle {
+  height: 30px;
+  border: 1px solid var(--cf-line-2);
+  border-radius: 999px;
+  background: var(--cf-surface);
+  color: var(--cf-ink-2);
+  font: 600 12px var(--cf-font);
+  padding: 0 12px;
+  cursor: pointer;
+}
+.cf-ls-toggle.is-active {
+  background: var(--cf-accent);
+  border-color: var(--cf-accent);
+  color: #fff;
+}
+.cf-launch-intro {
+  background: var(--cf-accent-soft);
+  border-radius: 16px;
+  padding: 13px 16px;
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--cf-ink-3);
+}
+.cf-launch-intro .cf-scene { margin-top: 12px; }
+
+/* Inline source input: the manual-input row expands in place, keeping the
+ * source list visible (row <-> input panel, no separate screen) */
+.cf-ls-expand .cf-ls-expand-panel { display: none; }
+.cf-ls-expand.is-open .cf-ls-expand-row { display: none; }
+.cf-ls-expand.is-open .cf-ls-expand-panel {
+  display: flex;
+  flex-direction: column;
+}
+.cf-ls-expand-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 10px 0 8px;
+}
+.cf-ls-expand-head .cf-ls-back { margin-top: 0; }
+.cf-ls-expand-head .cf-ls-submit {
+  width: auto;
+  min-width: 92px;
+  height: 36px;
+  margin-top: 0;
+  border-radius: 999px;
+  padding: 0 18px;
+  font-size: 14px;
+}
+
+/* Interaction-form comparison pieces */
+.cf-action.is-selected {
+  border-color: var(--cf-accent);
+  box-shadow: 0 0 0 2px rgba(91, 114, 207, .18);
+}
+.cf-seg {
+  display: flex;
+  background: #EDF0F5;
+  border-radius: 12px;
+  padding: 3px;
+  margin: 12px 0 16px;
+}
+.cf-seg-item {
+  flex: 1;
+  height: 34px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--cf-ink-2);
+  font: 600 12.5px var(--cf-font);
+  cursor: pointer;
+}
+.cf-seg-item.is-active {
+  background: var(--cf-surface);
+  color: var(--cf-accent);
+  box-shadow: 0 1px 4px rgba(23, 53, 83, .12);
+}
+.cf-dock {
+  border-top: 1px solid var(--cf-line-2);
+  margin-top: 14px;
+  padding-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cf-dock .cf-ls-field { min-height: 44px; flex: 1; }
+.cf-dock .cf-ico { width: 20px; height: 20px; color: var(--cf-accent); flex: none; }
+.cf-dock .cf-ls-submit {
+  width: auto;
+  height: 40px;
+  margin-top: 0;
+  padding: 0 16px;
+  font-size: 14px;
+}
+.cf-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 26, 34, .38);
+  border-radius: inherit;
+  z-index: 3;
+}
+.cf-overlay-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  background: var(--cf-surface);
+  border-radius: 22px 22px 0 0;
+  padding: 14px 16px 0;
+  box-shadow: 0 -8px 24px rgba(23, 53, 83, .18);
+}
+.cf-keyboard {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 5px;
+  padding: 12px 0 4px;
+}
+.cf-keyboard i {
+  height: 28px;
+  border-radius: 6px;
+  background: var(--cf-surface);
+  border: 1px solid #DFE4EB;
+}
+.cf-keyboard .cf-kb-space {
+  grid-column: 1 / -1;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--cf-surface);
+  border: 1px solid #DFE4EB;
+  margin-top: 5px;
+}
+.cf-ls-back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: none;
+  padding: 0;
+  margin-top: 8px;
+  color: var(--cf-accent);
+  font: 600 14px var(--cf-font);
+  cursor: pointer;
+}
+.cf-ls-back .cf-ico { width: 18px; height: 18px; }
+.cf-ls-title2 {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--cf-ink);
+  margin: 10px 0 12px;
+}
+.cf-ls-field {
+  width: 100%;
+  min-height: 150px;
+  background: var(--cf-field);
+  border: 1px solid var(--cf-line-2);
+  border-radius: 14px;
+  padding: 12px 14px;
+  font: 15px/1.6 var(--cf-font);
+  color: var(--cf-ink);
+  resize: none;
+  outline: none;
+}
+.cf-ls-field:focus { border-color: var(--cf-accent); }
+.cf-ls-submit {
+  width: 100%;
+  height: 52px;
+  margin-top: 16px;
+  border: none;
+  border-radius: 14px;
+  background: var(--cf-primary);
+  color: #fff;
+  font: 600 15px var(--cf-font);
+  cursor: pointer;
+}
+.cf-ls-submit.is-disabled {
+  background: #DCE3EA;
+  color: #9AA6B4;
+  cursor: default;
+}
+.cf-ls-launching {
+  flex: 1;
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--cf-ink-2);
+  font-size: 14px;
+}
+.cf-ls-closed {
+  flex: 1;
+  min-height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cf-ink-2);
+  font-size: 14px;
+  text-align: center;
+  padding: 24px;
+}
+.cf-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid #DCE5EF;
+  border-top-color: var(--cf-accent);
+  animation: cf-spin .8s linear infinite;
+}
+@keyframes cf-spin { to { transform: rotate(360deg); } }
+
+/* FigJam-style flow frame: a frame type that lives on the canvas */
+.cf-jam {
+  width: 940px;
+  background: #FBFAF5;
+  border: 1.5px dashed #D8D2C2;
+  border-radius: 22px;
+  padding: 20px 22px 22px;
+  box-shadow: 0 8px 22px rgba(23, 53, 83, .08);
+}
+.cf-jam-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #7A6B45;
+  margin-bottom: 14px;
+}
+.cf-jam-steps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.cf-jam-sticky {
+  background: #FFF3C4;
+  border: 1px solid #E9D87F;
+  border-radius: 12px;
+  padding: 10px 14px;
+  box-shadow: 0 2px 6px rgba(80, 65, 20, .10);
+  min-width: 96px;
+}
+.cf-jam-sticky b { display: block; font-size: 13px; color: #5C4E1E; }
+.cf-jam-sticky span { font-size: 11.5px; color: #8A7A3E; }
+.cf-jam-arrow { display: inline-flex; align-items: center; color: #B9A95F; flex: none; }
+.cf-jam-arrow .cf-ico { width: 22px; height: 22px; }
+.cf-jam-cards {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+.cf-jam-card {
+  background: #EAF3FF;
+  border: 1px solid #C4D9F5;
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 2px 6px rgba(30, 70, 130, .08);
+  font-size: 11.5px;
+  color: #3D5679;
+  line-height: 1.55;
+}
+.cf-jam-card b { display: block; color: #23415F; margin-bottom: 3px; font-size: 12.5px; }
+
+/* Figma frame label */
+.cf-fig { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.cf-fig-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--cf-ink-2);
+  max-width: 100%;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.cf-fr-badge {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--cf-accent);
+  flex: none;
+}
+.cf-fig-label b { font-weight: 700; color: var(--cf-ink); }
+.cf-dims { color: #98A2B3; font-variant-numeric: tabular-nums; }
+.cf-tag {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--cf-accent-soft);
+  color: var(--cf-accent);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+/* Phone screen frame */
+.cf-frame-wrap { position: relative; border-radius: 32px; }
+.cf-frame {
+  width: 393px;
+  height: 852px;
+  background: var(--cf-bg);
+  border: 1px solid #D8DEE6;
+  border-radius: 32px;
+  box-shadow: var(--cf-shadow);
+  overflow: hidden;
+  position: relative;
+}
+.cf-frame.is-selected {
+  outline: 2.5px solid var(--cf-accent);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 9px rgba(23, 111, 242, .10), var(--cf-shadow);
+}
+
+/* iOS status bar */
+.cf-status {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cf-ink);
+  background: var(--cf-surface);
+  position: relative;
+  z-index: 5;
+}
+.cf-status-right { display: flex; align-items: center; gap: 5px; }
+.cf-marker {
+  position: absolute;
+  left: 122px;
+  top: 13px;
+  color: #2E9E5B;
+  font-size: 12px;
+  font-weight: 700;
+  z-index: 6;
+}
+.cf-batt {
+  width: 21px;
+  height: 11px;
+  border: 1.5px solid var(--cf-ink);
+  border-radius: 3px;
+  position: relative;
+  display: inline-block;
+}
+.cf-batt::after {
+  content: "";
+  position: absolute;
+  right: -3.5px;
+  top: 2.5px;
+  width: 2px;
+  height: 4px;
+  border-radius: 0 1px 1px 0;
+  background: var(--cf-ink);
+}
+.cf-batt i {
+  position: absolute;
+  left: 1.5px;
+  top: 1.5px;
+  bottom: 1.5px;
+  right: 1.5px;
+  background: #F5C518;
+  border-radius: 1px;
+}
+
+/* App bar */
+.cf-appbar {
+  height: 56px;
+  background: var(--cf-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--cf-ink);
+}
+.cf-back {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cf-accent);
+}
+
+/* Generic icon helpers */
+.cf-ico { display: inline-flex; flex: none; }
+.cf-ico svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+/* Icons inside sized chevron/back wrappers must fill the wrapper; without
+ * this, svg width:100% resolves to the svg default (300px) and blows up. */
+.cf-chev .cf-ico { width: 100%; height: 100%; }
+.cf-back .cf-ico { width: 20px; height: 20px; }
+.cf-action .cf-chev {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Frame-level content needs the same 20px side inset the panels have. */
+.cf-frame > .cf-start,
+.cf-frame > .cf-action,
+.cf-frame > .cf-tl-body,
+.cf-frame > .cf-ls-title2,
+.cf-frame > .cf-ls-submit,
+.cf-frame > .cf-choice {
+  margin-left: 20px;
+  margin-right: 20px;
+}
+
+/* Header card (form-type pages) */
+.cf-header-card {
+  margin: 20px 20px 0;
+  padding: 20px;
+  border-radius: 24px;
+  background: linear-gradient(122deg, rgba(52, 120, 212, .16), #FFFFFF 58%);
+  border: 1px solid rgba(52, 120, 212, .26);
+  display: flex;
+  gap: 15px;
+}
+.cf-icon-tile {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: var(--cf-math);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.cf-icon-tile .cf-ico { width: 27px; height: 27px; }
+.cf-header-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cf-cat { font-size: 12px; font-weight: 700; color: var(--cf-math); }
+.cf-name { font-size: 22px; font-weight: 800; color: var(--cf-ink); line-height: 1.2; }
+.cf-sub { font-size: 14px; color: var(--cf-ink-3); line-height: 1.45; }
+
+/* White panel */
+.cf-panel {
+  margin: 18px 20px 0;
+  padding: 18px;
+  background: var(--cf-surface);
+  border: 1px solid var(--cf-line);
+  border-radius: 20px;
+}
+.cf-panel-title { font-size: 17px; font-weight: 800; color: var(--cf-ink); margin-bottom: 14px; }
+
+/* Form fields */
+.cf-field-label {
+  display: block;
+  font-size: 13px;
+  color: var(--cf-ink-3);
+  margin: 0 0 6px;
+}
+.cf-field {
+  width: 100%;
+  min-height: 52px;
+  background: var(--cf-field);
+  border: 1px solid var(--cf-line-2);
+  border-radius: 14px;
+  padding: 12px 14px;
+  font: 15px/1.5 var(--cf-font);
+  color: var(--cf-ink);
+}
+.cf-field.is-5 { min-height: 132px; }
+.cf-field.is-3 { min-height: 86px; }
+.cf-field + .cf-field-label { margin-top: 16px; }
+
+/* Primary button */
+.cf-btn-primary {
+  width: 100%;
+  height: 52px;
+  margin-top: 16px;
+  border: none;
+  border-radius: 14px;
+  background: var(--cf-primary);
+  color: #fff;
+  font: 600 15px var(--cf-font);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.cf-btn-primary .cf-ico { width: 18px; height: 18px; }
+
+/* Scrolled form: visible lower half of a form panel */
+.cf-form-scroll {
+  background: var(--cf-surface);
+  padding: 16px 20px 0;
+}
+.cf-form-scroll .cf-btn-primary { margin-top: 14px; }
+
+/* Timeline source block */
+.cf-src-block {
+  margin: 18px 20px 0;
+  padding: 16px 18px;
+  background: var(--cf-surface);
+  border: 1px solid var(--cf-line);
+  border-radius: 20px;
+}
+.cf-src-title { font-size: 17px; font-weight: 800; margin-bottom: 8px; }
+.cf-src-value { font-size: 15px; color: var(--cf-ink-3); line-height: 1.5; }
+
+/* Collapsed process tile */
+.cf-process {
+  margin: 12px 20px 0;
+  height: 46px;
+  background: var(--cf-process);
+  border: 1px solid var(--cf-process-line);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cf-ink-3);
+}
+.cf-process .cf-ico { width: 18px; height: 18px; color: var(--cf-primary); }
+.cf-process .cf-chev {
+  margin-left: auto;
+  color: var(--cf-muted);
+  transform: rotate(90deg);
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+}
+
+/* Timeline text/explanation block */
+.cf-timeline-block {
+  margin: 12px 20px 0;
+  padding: 16px 18px;
+  background: var(--cf-surface);
+  border: 1px solid var(--cf-line);
+  border-radius: 20px;
+}
+.cf-tl-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.cf-tl-title { font-size: 17px; font-weight: 800; flex: 1; }
+.cf-chip {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cf-ink-2);
+  background: var(--cf-chip);
+  border-radius: 999px;
+  padding: 4px 10px;
+  flex: none;
+}
+.cf-tl-body { font-size: 15px; line-height: 1.58; color: var(--cf-ink); }
+.cf-tl-body div + div { margin-top: 4px; }
+
+/* Memory-anchor block (real memorize-english-words presentation) */
+.cf-anchor { margin: 12px 20px 0; }
+.cf-pron { color: #5b72cf; background: #f0f2ff; }
+.cf-anchor-meaning {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--cf-ink);
+  margin-bottom: 10px;
+}
+.cf-anchor-hook {
+  background: linear-gradient(135deg, #edf0ff, #fff2dd);
+  border-radius: 16px;
+  padding: 14px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--cf-ink);
+}
+.cf-anchor-resolved {
+  margin-top: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #52606d;
+}
+
+/* Choice buttons */
+.cf-choices {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+.cf-choice {
+  height: 46px;
+  padding: 0 24px;
+  border-radius: 999px;
+  border: 1.5px solid var(--cf-line-2);
+  background: var(--cf-surface);
+  color: var(--cf-ink-3);
+  font: 600 15px var(--cf-font);
+  cursor: default;
+  white-space: nowrap;
+}
+
+/* ---- Launch sheet (frame 1) ---- */
+.cf-backdrop {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 44px;
+  height: 48px;
+  background: #FFFFFF;
+  z-index: 1;
+}
+.cf-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: 92px;
+  background: var(--cf-sheet);
+  border-radius: 34px 34px 0 0;
+  box-shadow: 0 -8px 28px rgba(23, 53, 83, .10);
+  display: flex;
+  flex-direction: column;
+  padding: 12px 24px 20px;
+  overflow: hidden;
+  z-index: 2;
+}
+.cf-drag {
+  width: 60px;
+  height: 5px;
+  border-radius: 3px;
+  background: #B9C5D3;
+  align-self: center;
+  flex: none;
+}
+.cf-close {
+  position: absolute;
+  right: 16px;
+  top: 8px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: #EFF3F8;
+  color: var(--cf-ink-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.cf-close .cf-ico { width: 15px; height: 15px; }
+.cf-sheet .cf-cat { color: var(--cf-accent); margin-top: 10px; }
+.cf-launch-title { font-size: 26px; font-weight: 800; line-height: 1.14; margin-top: 7px; }
+.cf-launch-body { font-size: 15px; color: var(--cf-ink-2); line-height: 1.42; margin-top: 10px; }
+
+.cf-transcript {
+  margin-top: 14px;
+  background: linear-gradient(135deg, var(--cf-transcript-a), var(--cf-transcript-b));
+  border: 2px solid #2F86F6;
+  border-radius: 16px;
+  padding: 13px 16px;
+  font-size: 15px;
+  line-height: 1.62;
+  color: var(--cf-ink);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cf-scene {
+  margin-top: 12px;
+  height: 66px;
+  flex: none;
+  border-radius: 22px;
+  background: linear-gradient(135deg, var(--cf-accent-soft), #FBFDFE 75%);
+  border: 1px solid rgba(23, 111, 242, .30);
+  display: flex;
+  align-items: center;
+  padding: 8px 14px;
+  gap: 6px;
+}
+.cf-scene-node {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #344054;
+  text-align: center;
+  min-width: 0;
+}
+.cf-scene-ico {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .9);
+  box-shadow: 0 4px 10px rgba(23, 50, 79, .08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cf-accent);
+}
+.cf-scene-ico .cf-ico { width: 21px; height: 21px; }
+.cf-scene-mid {
+  width: 92px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cf-accent);
+}
+.cf-scene-arrow {
+  width: 38px;
+  height: 1.5px;
+  background: rgba(23, 111, 242, .45);
+  position: relative;
+}
+.cf-scene-arrow::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: -3px;
+  border-left: 5px solid rgba(23, 111, 242, .55);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+
+.cf-start { font-size: 18px; font-weight: 800; margin: 14px 0 10px; }
+.cf-mode-card {
+  height: 64px;
+  flex: none;
+  background: var(--cf-surface);
+  border: 1px solid var(--cf-line-2);
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+}
+.cf-mode-ico {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: #F3EFFF;
+  color: var(--cf-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.cf-mode-ico .cf-ico { width: 19px; height: 19px; }
+.cf-mode-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cf-mode-text b { font-size: 14px; font-weight: 700; color: var(--cf-ink); }
+.cf-mode-text span {
+  font-size: 11px;
+  color: var(--cf-ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cf-mic {
+  height: 36px;
+  border: none;
+  border-radius: 12px;
+  background: var(--cf-accent);
+  color: #fff;
+  font: 700 13px var(--cf-font);
+  padding: 0 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.cf-mic .cf-ico { width: 16px; height: 16px; }
+.cf-textmode {
+  height: 36px;
+  border: 1px solid var(--cf-line-2);
+  border-radius: 12px;
+  background: var(--cf-surface);
+  color: var(--cf-ink);
+  font: 700 13px var(--cf-font);
+  padding: 0 12px;
+  flex: none;
+}
+
+.cf-action {
+  height: 56px;
+  flex: none;
+  background: var(--cf-surface);
+  border: 1px solid var(--cf-line-2);
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  margin-top: 8px;
+}
+.cf-action-ico {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: #F1F5F9;
+  color: var(--cf-ink-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.cf-action-ico .cf-ico { width: 18px; height: 18px; }
+.cf-action div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.cf-action b { font-size: 14px; font-weight: 700; color: var(--cf-ink); }
+.cf-action span {
+  font-size: 11px;
+  color: var(--cf-ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cf-action .cf-chev {
+  width: 16px;
+  height: 16px;
+  color: #98A2B3;
+  flex: none;
+}
+
+/* Fragment root fills available conversation width */
+#canvas-frames-demo {
+  width: 100%;
+  padding: 4px 2px 8px;
+}
+
+body{margin:0;padding:14px;background:#f4f6f8}
+</style>
+</head>
+<body>
+<div id="canvas-frames-demo">
+<div class="cf-toolbar">
+  <span class="cf-toolbar-title">gemini-app</span>
+  <div class="cf-pagetabs" role="tablist" aria-label="选择页面">
+<button class="cf-pagetab" role="tab">Google Gemini App (I/O &amp; Dev Edition)</button>
+  </div>
+</div>
+<div class="cf-page" data-cf-id="page_fd508995" data-cf-type="page" data-name="Google Gemini App (I/O &amp; Dev Edition)" data-page="page_fd508995">
+    <div class="cf-stage">
+      <div class="cf-canvas-viewport">
+        <div class="cf-canvas-inner">
+          <div class="cf-canvas">
+<div class="cf-fig">
+            <div class="cf-fig-label">
+              <span class="cf-fr-badge"></span><b>Google Gemini App (I/O &amp; Dev Edition)</b>
+              <span>01 Multimodal Workspace &amp; Hub</span><span class="cf-dims">393 × 852</span>
+            </div>
+            <div class="cf-frame-wrap"><div class="cf-frame" data-cf-id="frame_740258fe" data-cf-type="frame" data-name="01 Multimodal Workspace &amp; Hub" data-kind="phone" data-w="393" data-h="852" role="img">
+<div class="cf-status" data-cf-id="c_8aca8d24" data-cf-type="status-bar" data-battery="98" data-clock="09:41"><span>09:41</span><span class="cf-status-right"><span>5G</span><span class="cf-batt"><i></i></span><span>98</span></span></div>
+<div class="cf-appbar" data-cf-id="c_86154be1" data-cf-type="app-bar" data-title="Gemini Advanced · 2.0 Flash" data-back="false">Gemini Advanced · 2.0 Flash</div>
+<div class="cf-seg" data-cf-id="c_51d378a1" data-cf-type="seg" data-active="Gemini 2.0 Flash" data-items="[&quot;Gemini 2.0 Flash&quot;,&quot;2.0 Thinking&quot;,&quot;2.0 Pro&quot;]"><button class="cf-seg-item is-active">Gemini 2.0 Flash</button><button class="cf-seg-item">2.0 Thinking</button><button class="cf-seg-item">2.0 Pro</button></div>
+<div class="cf-src-block" data-cf-id="c_7e6a2635" data-cf-type="panel" data-title="✨ Google Workspace &amp; Tool Extensions"><div class="cf-src-title">✨ Google Workspace &amp; Tool Extensions</div></div>
+<div class="cf-tl-body" data-cf-id="c_46cabbdd" data-cf-type="text" data-value="Linked with Google Drive, Docs, Gmail, YouTube, Maps, and Python Code Canvas for autonomous execution and rich multimodal grounding.">Linked with Google Drive, Docs, Gmail, YouTube, Maps, and Python Code Canvas for autonomous execution and rich multimodal grounding.</div>
+<div class="cf-start" data-cf-id="c_a8e874c5" data-cf-type="heading" data-value="Start a Multimodal Journey">Start a Multimodal Journey</div>
+<div class="cf-action is-selected" data-cf-id="c_d4fc7a29" data-cf-type="action-row" data-label="Gemini Live (Vision &amp; Voice)" data-description="Real-time Project Astra camera &amp; spatial reasoning" data-icon="camera" data-selected="true"><span class="cf-action-ico"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span></span><div><b>Gemini Live (Vision &amp; Voice)</b><span>Real-time Project Astra camera &amp; spatial reasoning</span></div><span class="cf-chev"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></span></div>
+<div class="cf-action" data-cf-id="c_de34a724" data-cf-type="action-row" data-label="Deep Research Agent" data-description="Comprehensive 20-source web synthesis &amp; Docs export" data-icon="doc" data-selected="false"><span class="cf-action-ico"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg></span></span><div><b>Deep Research Agent</b><span>Comprehensive 20-source web synthesis &amp; Docs export</span></div><span class="cf-chev"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></span></div>
+<div class="cf-action" data-cf-id="c_6fb24757" data-cf-type="action-row" data-label="Custom Gems &amp; Coding Coach" data-description="Curated domain experts and live interactive canvas" data-icon="sparkle" data-selected="false"><span class="cf-action-ico"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19l1-4L17 4l3 3L9 18l-4 1z"/></svg></span></span><div><b>Custom Gems &amp; Coding Coach</b><span>Curated domain experts and live interactive canvas</span></div><span class="cf-chev"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></span></div>
+<div class="cf-dock" data-cf-id="c_a61b4b63" data-cf-type="dock" data-submitLabel="Ask"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></span><button class="cf-ls-submit">Ask</button></div>
+<textarea class="cf-ls-field" data-cf-id="c_f6017e8a" data-cf-type="field" data-value="Launch Gemini Live: Analyze this robotic arm mechanism" data-placeholder="Type, talk, or share camera stream..." data-lines="2" placeholder="Type, talk, or share camera stream...">Launch Gemini Live: Analyze this robotic arm mechanism</textarea>
+</div></div>
+          </div>
+<div class="cf-fig">
+            <div class="cf-fig-label">
+              <span class="cf-fr-badge"></span><b>Google Gemini App (I/O &amp; Dev Edition)</b>
+              <span>02 Gemini Live Multimodal Camera</span><span class="cf-dims">393 × 852</span>
+            </div>
+            <div class="cf-frame-wrap"><div class="cf-frame" data-cf-id="frame_2261d404" data-cf-type="frame" data-name="02 Gemini Live Multimodal Camera" data-kind="phone" data-w="393" data-h="852" role="img">
+<div class="cf-status" data-cf-id="c_3d9992de" data-cf-type="status-bar" data-battery="97" data-clock="09:42"><span>09:42</span><span class="cf-status-right"><span>5G</span><span class="cf-batt"><i></i></span><span>97</span></span></div>
+<div class="cf-appbar" data-cf-id="c_f631d69a" data-cf-type="app-bar" data-title="Gemini Live (Astra Camera)" data-back="true"><span class="cf-back"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></span></span>Gemini Live (Astra Camera)</div>
+<div class="cf-process" data-cf-id="c_f121aba0" data-cf-type="process" data-label="Live Video Stream (30fps) · Spatial Grounding &amp; AR Active"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg></span><span>Live Video Stream (30fps) · Spatial Grounding &amp; AR Active</span><span class="cf-chev"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></span></div>
+<div class="cf-src-block" data-cf-id="c_649b8553" data-cf-type="panel" data-title="Live Viewfinder: Object Analysis"><div class="cf-src-title">Live Viewfinder: Object Analysis</div></div>
+<div class="cf-tl-body" data-cf-id="c_f1b3b929" data-cf-type="text" data-value="🔍 Target Detected: Planetary Gearbox &amp; Stepper Motor\n\n• High-torque planetary reduction stage (5:1 ratio)\n• Minor backlash observed on the sun gear interface\n• Thermal profile: Normal operational range (38°C)">🔍 Target Detected: Planetary Gearbox &amp; Stepper Motor\n\n• High-torque planetary reduction stage (5:1 ratio)\n• Minor backlash observed on the sun gear interface\n• Thermal profile: Normal operational range (38°C)</div>
+<div class="cf-src-block" data-cf-id="c_6c83aa28" data-cf-type="panel" data-title="Multimodal Voice Conversation"><div class="cf-src-title">Multimodal Voice Conversation</div></div>
+<div class="cf-tl-body" data-cf-id="c_388031c4" data-cf-type="text" data-value="User: &quot;Gemini, is this gearbox aligned properly with the output shaft?&quot;\n\nGemini: &quot;Looking at the alignment marker on the pinion flange, it is offset by about 2 millimeters clockwise. Loosen the four hex bolts on the mounting plate to re-center it.&quot;">User: &quot;Gemini, is this gearbox aligned properly with the output shaft?&quot;\n\nGemini: &quot;Looking at the alignment marker on the pinion flange, it is offset by about 2 millimeters clockwise. Loosen the four hex bolts on the mounting plate to re-center it.&quot;</div>
+<div class="cf-start" data-cf-id="c_a12b5306" data-cf-type="heading" data-value="Live Stream Controls">Live Stream Controls</div>
+<div class="cf-action is-selected" data-cf-id="c_3baae297" data-cf-type="action-row" data-label="Live Voice: Bi-directional Audio" data-description="Interruptible conversational streaming (&lt;300ms latency)" data-icon="mic" data-selected="true"><span class="cf-action-ico"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span></span><div><b>Live Voice: Bi-directional Audio</b><span>Interruptible conversational streaming (&lt;300ms latency)</span></div><span class="cf-chev"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></span></div>
+<button class="cf-ls-submit" data-cf-id="c_94d86d9b" data-cf-type="button" data-label="Pause Live Vision Stream" data-active="false" data-variant="primary">Pause Live Vision Stream</button>
+</div></div>
+          </div>
+<div class="cf-fig">
+            <div class="cf-fig-label">
+              <span class="cf-fr-badge"></span><b>Google Gemini App (I/O &amp; Dev Edition)</b>
+              <span>03 Deep Research Report &amp; Canvas</span><span class="cf-dims">393 × 852</span>
+            </div>
+            <div class="cf-frame-wrap"><div class="cf-frame" data-cf-id="frame_cdbceb49" data-cf-type="frame" data-name="03 Deep Research Report &amp; Canvas" data-kind="phone" data-w="393" data-h="852" role="img">
+<div class="cf-status" data-cf-id="c_c56da96f" data-cf-type="status-bar" data-battery="96" data-clock="09:44"><span>09:44</span><span class="cf-status-right"><span>5G</span><span class="cf-batt"><i></i></span><span>96</span></span></div>
+<div class="cf-appbar" data-cf-id="c_5b408a56" data-cf-type="app-bar" data-title="Deep Research Report" data-back="true"><span class="cf-back"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></span></span>Deep Research Report</div>
+<div class="cf-process" data-cf-id="c_64900630" data-cf-type="process" data-label="Synthesized 36 web papers · 120 verified citations in 6.4s"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg></span><span>Synthesized 36 web papers · 120 verified citations in 6.4s</span><span class="cf-chev"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></span></div>
+<div class="cf-src-block" data-cf-id="c_948463f2" data-cf-type="panel" data-title="Executive Brief: Quantum Error Mitigation"><div class="cf-src-title">Executive Brief: Quantum Error Mitigation</div></div>
+<div class="cf-tl-body" data-cf-id="c_840673b6" data-cf-type="text" data-value="Quantum computing architectures in 2025 demonstrate fault-tolerant surface code thresholds exceeding 99.7% 2-qubit gate fidelity.\n\n• Willow architecture confirms exponential suppression of physical errors\n• Hybrid quantum-classical optimization scales to 1,000 logical qubits">Quantum computing architectures in 2025 demonstrate fault-tolerant surface code thresholds exceeding 99.7% 2-qubit gate fidelity.\n\n• Willow architecture confirms exponential suppression of physical errors\n• Hybrid quantum-classical optimization scales to 1,000 logical qubits</div>
+<div class="cf-start" data-cf-id="c_71e68d11" data-cf-type="heading" data-value="Authoritative Citations &amp; Source Documents">Authoritative Citations &amp; Source Documents</div>
+<div class="cf-action is-selected" data-cf-id="c_dfe632bc" data-cf-type="action-row" data-label="Google Quantum AI Lab Whitepaper" data-description="Willow architecture: Quantum error correction benchmark data" data-icon="globe" data-selected="true"><span class="cf-action-ico"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19l1-4L17 4l3 3L9 18l-4 1z"/></svg></span></span><div><b>Google Quantum AI Lab Whitepaper</b><span>Willow architecture: Quantum error correction benchmark data</span></div><span class="cf-chev"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></span></div>
+<div class="cf-action" data-cf-id="c_4bc39d58" data-cf-type="action-row" data-label="Nature Physics 2025 Report" data-description="Experimental realization of logical qubit entanglement" data-icon="doc" data-selected="false"><span class="cf-action-ico"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg></span></span><div><b>Nature Physics 2025 Report</b><span>Experimental realization of logical qubit entanglement</span></div><span class="cf-chev"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></span></div>
+<div class="cf-action" data-cf-id="c_f58bb365" data-cf-type="action-row" data-label="Export to Google Docs &amp; Sheets" data-description="One-click export of formatted brief with interactive citations" data-icon="share" data-selected="false"><span class="cf-action-ico"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19l1-4L17 4l3 3L9 18l-4 1z"/></svg></span></span><div><b>Export to Google Docs &amp; Sheets</b><span>One-click export of formatted brief with interactive citations</span></div><span class="cf-chev"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></span></div>
+<div class="cf-dock" data-cf-id="c_c149cc90" data-cf-type="dock" data-submitLabel="Dive Deeper"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></span><button class="cf-ls-submit">Dive Deeper</button></div>
+<textarea class="cf-ls-field" data-cf-id="c_a448721d" data-cf-type="field" data-value="Draft a 5-slide technical summary in Google Slides" data-placeholder="Ask a follow-up or generate slide outline..." data-lines="1" placeholder="Ask a follow-up or generate slide outline...">Draft a 5-slide technical summary in Google Slides</textarea>
+</div></div>
+          </div>
+<div class="cf-fig">
+            <div class="cf-fig-label">
+              <span class="cf-fr-badge"></span><b>Google Gemini App (I/O &amp; Dev Edition)</b>
+              <span>04 Custom Gems &amp; Extension Hub</span><span class="cf-dims">393 × 852</span>
+            </div>
+            <div class="cf-frame-wrap"><div class="cf-frame" data-cf-id="frame_6ab09a2f" data-cf-type="frame" data-name="04 Custom Gems &amp; Extension Hub" data-kind="phone" data-w="393" data-h="852" role="img">
+<div class="cf-status" data-cf-id="c_1dd65ba6" data-cf-type="status-bar" data-battery="95" data-clock="09:45"><span>09:45</span><span class="cf-status-right"><span>5G</span><span class="cf-batt"><i></i></span><span>95</span></span></div>
+<div class="cf-appbar" data-cf-id="c_9ac879f8" data-cf-type="app-bar" data-title="Gems &amp; Extension Hub" data-back="true"><span class="cf-back"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></span></span>Gems &amp; Extension Hub</div>
+<div class="cf-seg" data-cf-id="c_816a3bf1" data-cf-type="seg" data-active="Featured Gems" data-items="[&quot;Featured Gems&quot;,&quot;My Custom Gems&quot;,&quot;Workspace Tools&quot;]"><button class="cf-seg-item is-active">Featured Gems</button><button class="cf-seg-item">My Custom Gems</button><button class="cf-seg-item">Workspace Tools</button></div>
+<div class="cf-src-block" data-cf-id="c_be46be38" data-cf-type="panel" data-title="Custom AI Gems for Work &amp; Creativity"><div class="cf-src-title">Custom AI Gems for Work &amp; Creativity</div></div>
+<div class="cf-tl-body" data-cf-id="c_b7c5cee0" data-cf-type="text" data-value="Personalized AI assistants powered by Gemini 2.0 Pro with custom system instructions, tool access, and grounding files.">Personalized AI assistants powered by Gemini 2.0 Pro with custom system instructions, tool access, and grounding files.</div>
+<div class="cf-start" data-cf-id="c_d3f9f334" data-cf-type="heading" data-value="Available Gems">Available Gems</div>
+<div class="cf-action is-selected" data-cf-id="c_70133293" data-cf-type="action-row" data-label="Full-Stack Code Architect" data-description="Refactors TypeScript/Python and pushes to Cloud Deploy" data-icon="code" data-selected="true"><span class="cf-action-ico"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19l1-4L17 4l3 3L9 18l-4 1z"/></svg></span></span><div><b>Full-Stack Code Architect</b><span>Refactors TypeScript/Python and pushes to Cloud Deploy</span></div><span class="cf-chev"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></span></div>
+<div class="cf-action" data-cf-id="c_d256ca1a" data-cf-type="action-row" data-label="Socratic Learning Tutor" data-description="Deep-dives into STEM topics with interactive diagrams" data-icon="star" data-selected="false"><span class="cf-action-ico"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19l1-4L17 4l3 3L9 18l-4 1z"/></svg></span></span><div><b>Socratic Learning Tutor</b><span>Deep-dives into STEM topics with interactive diagrams</span></div><span class="cf-chev"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></span></div>
+<div class="cf-action" data-cf-id="c_adc257f3" data-cf-type="action-row" data-label="Data &amp; Spreadsheet Analyst" data-description="Directly queries Google Sheets and generates live SQL &amp; charts" data-icon="doc" data-selected="false"><span class="cf-action-ico"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg></span></span><div><b>Data &amp; Spreadsheet Analyst</b><span>Directly queries Google Sheets and generates live SQL &amp; charts</span></div><span class="cf-chev"><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></span></div>
+<button class="cf-ls-submit" data-cf-id="c_ddeac658" data-cf-type="button" data-label="+ Create New Custom Gem" data-active="true" data-variant="primary">+ Create New Custom Gem</button>
+</div></div>
+          </div>
+<div class="cf-fig">
+            <div class="cf-fig-label">
+              <span class="cf-fr-badge"></span><b>Google Gemini App (I/O &amp; Dev Edition)</b>
+              <span>05 Gemini 2.0 Multimodal Architecture Loop</span><span class="cf-dims">940 × 852</span>
+            </div>
+            <div class="cf-frame-wrap"><div class="cf-frame" data-cf-id="frame_523ecffc" data-cf-type="frame" data-name="05 Gemini 2.0 Multimodal Architecture Loop" data-kind="jam" data-w="940" data-h="852" role="img">
+<div class="cf-jam-sticky" data-cf-id="c_658f4b14" data-cf-type="figjam-sticky" data-title="1. Continuous Multimodal Stream" data-text="Audio PCM stream + 30fps video frames ingested concurrently via WebSockets."><b>1. Continuous Multimodal Stream</b><span>Audio PCM stream + 30fps video frames ingested concurrently via WebSockets.</span></div>
+<span class="cf-jam-arrow" data-cf-id="c_750db1b6" data-cf-type="connector" ><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h16"/><path d="M14 6l6 6-6 6"/></svg></span></span>
+<div class="cf-jam-sticky" data-cf-id="c_3298d9f6" data-cf-type="figjam-sticky" data-title="2. Gemini 2.0 Flash Core Engine" data-text="Low-latency native multimodal transformer with 2M token context window."><b>2. Gemini 2.0 Flash Core Engine</b><span>Low-latency native multimodal transformer with 2M token context window.</span></div>
+<span class="cf-jam-arrow" data-cf-id="c_3115e4ef" data-cf-type="connector" ><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h16"/><path d="M14 6l6 6-6 6"/></svg></span></span>
+<div class="cf-jam-sticky" data-cf-id="c_605a7693" data-cf-type="figjam-sticky" data-title="3. Spatial Grounding &amp; Tool Router" data-text="AR bounding box coordinates + Google Workspace and Search tool calling."><b>3. Spatial Grounding &amp; Tool Router</b><span>AR bounding box coordinates + Google Workspace and Search tool calling.</span></div>
+<span class="cf-jam-arrow" data-cf-id="c_8bf2b5ae" data-cf-type="connector" ><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h16"/><path d="M14 6l6 6-6 6"/></svg></span></span>
+<div class="cf-jam-sticky" data-cf-id="c_96d1aef3" data-cf-type="figjam-sticky" data-title="4. Deep Research &amp; Code Canvas" data-text="Multi-step autonomous web research &amp; interactive artifact rendering."><b>4. Deep Research &amp; Code Canvas</b><span>Multi-step autonomous web research &amp; interactive artifact rendering.</span></div>
+<span class="cf-jam-arrow" data-cf-id="c_5b407e4f" data-cf-type="connector" ><span class="cf-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h16"/><path d="M14 6l6 6-6 6"/></svg></span></span>
+<div class="cf-jam-sticky" data-cf-id="c_3f920cdf" data-cf-type="figjam-sticky" data-title="5. Real-Time Audio TTS &amp; AR Overlay" data-text="Sub-300ms natural voice synthesis and live AR visual tags rendered in viewfinder."><b>5. Real-Time Audio TTS &amp; AR Overlay</b><span>Sub-300ms natural voice synthesis and live AR visual tags rendered in viewfinder.</span></div>
+</div></div>
+          </div>
+          </div>
+        </div>
+      </div>
+      <div class="cf-zoombar">
+        <button type="button" data-zoom="out" aria-label="缩小">−</button>
+        <span class="cf-zoom-value">100%</span>
+        <button type="button" data-zoom="in" aria-label="放大">+</button>
+        <button type="button" class="cf-zoom-fit" data-zoom="fit">适应</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>/* Canvas frame kit - Figma-like multi-page canvas.
+ * Each page (.cf-page) owns one infinite canvas (.cf-stage) with its own
+ * pan/zoom state; page tabs (.cf-pagetab) switch pages. Launch sheets
+ * (.cf-ls) can switch internal states without navigation.
+ * Embed a copy into each visualization fragment. Expects:
+ *   root#canvas-frames-demo
+ *   button.cf-pagetab (one per page)
+ *   .cf-page > (.cf-flow)? + .cf-stage
+ *   .cf-stage > .cf-canvas-viewport > .cf-canvas-inner > .cf-canvas
+ *   .cf-fig > .cf-frame-wrap > .cf-frame
+ *   .cf-zoombar with [data-zoom] buttons and .cf-zoom-value
+ *   .cf-ls with [data-ls-state] panels, [data-ls-go] controls,
+ *     textarea[data-ls-draft], [data-ls-submit]
+ */
+
+/* #cf-node-selected-payload-start
+ * Pure payload builder for the viewer bridge
+ * (spec design_harness_external_viewer_bridge). Kept outside the IIFE and
+ * marker-wrapped so the server smoke test can extract and unit-test it; the
+ * browser half calls it from notifyNodeSelected below.
+ */
+function buildNodeSelectedPayload(info) {
+  var fileId = info && info.fileId ? String(info.fileId) : null;
+  var payload = {
+    fileId: fileId,
+    pageId: info && info.pageId != null ? String(info.pageId) : null,
+    nodeId: info && info.nodeId ? String(info.nodeId) : null,
+    nodeType: info && info.nodeType ? String(info.nodeType) : 'frame',
+    nodeLabel: info && info.nodeLabel != null ? String(info.nodeLabel) : null,
+  };
+  if (info && info.rect && typeof info.rect === 'object') {
+    payload.rect = {
+      x: Number(info.rect.x) || 0,
+      y: Number(info.rect.y) || 0,
+      width: Number(info.rect.width) || 0,
+      height: Number(info.rect.height) || 0,
+    };
+  }
+  return { source: 'canvas-design-harness', type: 'node:selected', payload: payload };
+}
+/* #cf-node-selected-payload-end */
+
+(function () {
+  var root = document.getElementById('canvas-frames-demo');
+  if (!root) return;
+  var pageTabs = Array.prototype.slice.call(root.querySelectorAll('.cf-pagetab'));
+  var pages = Array.prototype.slice.call(root.querySelectorAll('.cf-page'));
+  if (pageTabs.length === 0 || pages.length === 0) return;
+
+  function clampScale(s) {
+    return Math.min(4, Math.max(0.15, s));
+  }
+  function dist(a, b) {
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+  function mid(a, b) {
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
+
+  function apply(st) {
+    st.inner.style.transform =
+      'translate(' + st.T.x + 'px,' + st.T.y + 'px) scale(' + st.T.s + ')';
+    if (st.zoomValue) st.zoomValue.textContent = Math.round(st.T.s * 100) + '%';
+  }
+  function viewportSize(st) {
+    var r = st.viewport.getBoundingClientRect();
+    return { w: r.width, h: r.height, left: r.left, top: r.top };
+  }
+  function zoomAt(st, cx, cy, factor) {
+    var s2 = clampScale(st.T.s * factor);
+    var k = s2 / st.T.s;
+    st.T.x = cx - (cx - st.T.x) * k;
+    st.T.y = cy - (cy - st.T.y) * k;
+    st.T.s = s2;
+    apply(st);
+  }
+  function contentBox(st) {
+    var v = viewportSize(st);
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    st.figs.forEach(function (fig) {
+      var node = fig.querySelector('.cf-frame-wrap') || fig;
+      var r = node.getBoundingClientRect();
+      var x0 = (r.left - v.left - st.T.x) / st.T.s;
+      var y0 = (r.top - v.top - st.T.y) / st.T.s;
+      var x1 = x0 + r.width / st.T.s;
+      var y1 = y0 + r.height / st.T.s;
+      minX = Math.min(minX, x0);
+      minY = Math.min(minY, y0);
+      maxX = Math.max(maxX, x1);
+      maxY = Math.max(maxY, y1);
+    });
+    if (minX === Infinity) return null;
+    return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+  }
+  function fit(st) {
+    var box = contentBox(st);
+    if (!box) return;
+    var v = viewportSize(st);
+    st.T.s = clampScale(Math.min(1, (v.w - 48) / box.w, (v.h - 48) / box.h));
+    st.T.x = v.w / 2 - (box.x + box.w / 2) * st.T.s;
+    st.T.y = v.h / 2 - (box.y + box.h / 2) * st.T.s;
+    apply(st);
+  }
+  function focusFrame(st, index) {
+    var fig = st.figs[index];
+    if (!fig) return;
+    var node = fig.querySelector('.cf-frame-wrap') || fig;
+    var v = viewportSize(st);
+    var r = node.getBoundingClientRect();
+    var cx = (r.left - v.left - st.T.x + r.width / 2) / st.T.s;
+    var cy = (r.top - v.top - st.T.y + r.height / 2) / st.T.s;
+    st.T.x = v.w / 2 - cx * st.T.s;
+    st.T.y = v.h / 2 - cy * st.T.s;
+    apply(st);
+  }
+  function selectFrame(st, index, focus) {
+    st.figs.forEach(function (fig, i) {
+      var frame = fig.querySelector('.cf-frame');
+      if (frame) frame.classList.toggle('is-selected', i === index);
+    });
+    if (focus) focusFrame(st, index);
+  }
+
+  function buildPageState(page) {
+    var viewport = page.querySelector('.cf-canvas-viewport');
+    var inner = page.querySelector('.cf-canvas-inner');
+    var zoomValue = page.querySelector('.cf-zoom-value');
+    var figs = Array.prototype.slice.call(page.querySelectorAll('.cf-fig'));
+    if (!viewport || !inner || figs.length === 0) return null;
+    var st = {
+      page: page,
+      viewport: viewport,
+      inner: inner,
+      zoomValue: zoomValue,
+      figs: figs,
+      T: { x: 0, y: 0, s: 1 },
+      pointers: new Map(),
+      pinch: null,
+      dragStart: null,
+      moved: false,
+      initialized: false,
+    };
+
+    viewport.addEventListener('pointerdown', function (e) {
+      viewport.setPointerCapture(e.pointerId);
+      st.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      st.moved = false;
+      if (st.pointers.size === 1) {
+        st.dragStart = { x: e.clientX, y: e.clientY, tx: st.T.x, ty: st.T.y };
+        st.pinch = null;
+      } else if (st.pointers.size === 2) {
+        var pts = Array.prototype.slice.call(st.pointers.values());
+        st.pinch = {
+          dist: dist(pts[0], pts[1]),
+          mid: mid(pts[0], pts[1]),
+          tx: st.T.x,
+          ty: st.T.y,
+          s: st.T.s,
+        };
+        st.dragStart = null;
+      }
+    });
+    viewport.addEventListener('pointermove', function (e) {
+      var p = st.pointers.get(e.pointerId);
+      if (!p) return;
+      p.x = e.clientX;
+      p.y = e.clientY;
+      if (st.pointers.size === 1 && st.dragStart) {
+        var dx = e.clientX - st.dragStart.x;
+        var dy = e.clientY - st.dragStart.y;
+        if (Math.abs(dx) + Math.abs(dy) > 3) st.moved = true;
+        if (st.moved) {
+          st.T.x = st.dragStart.tx + dx;
+          st.T.y = st.dragStart.ty + dy;
+          viewport.classList.add('is-panning');
+          apply(st);
+        }
+      } else if (st.pointers.size === 2 && st.pinch) {
+        var pts = Array.prototype.slice.call(st.pointers.values());
+        var d = dist(pts[0], pts[1]);
+        var m = mid(pts[0], pts[1]);
+        // Pinch sensitivity: fourth root of the distance ratio slows the
+        // zoom to quarter speed (a 2x finger spread becomes ~1.19x zoom).
+        var s2 = clampScale(st.pinch.s * Math.pow(d / st.pinch.dist, 0.25));
+        var k = s2 / st.pinch.s;
+        st.T.x = m.x - (st.pinch.mid.x - st.pinch.tx) * k;
+        st.T.y = m.y - (st.pinch.mid.y - st.pinch.ty) * k;
+        st.T.s = s2;
+        apply(st);
+      }
+    });
+    function endPointer(e) {
+      st.pointers.delete(e.pointerId);
+      if (st.pointers.size < 2) st.pinch = null;
+      if (st.pointers.size === 0) {
+        st.dragStart = null;
+        viewport.classList.remove('is-panning');
+      }
+    }
+    viewport.addEventListener('pointerup', endPointer);
+    viewport.addEventListener('pointercancel', endPointer);
+    viewport.addEventListener('click', function (e) {
+      if (st.moved) {
+        e.preventDefault();
+        e.stopPropagation();
+        st.moved = false;
+      }
+    }, true);
+    viewport.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    viewport.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      if (e.ctrlKey || e.metaKey) {
+        var r = viewport.getBoundingClientRect();
+        zoomAt(st, e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.037 : 1 / 1.037);
+      } else {
+        st.T.x -= e.deltaX;
+        st.T.y -= e.deltaY;
+        apply(st);
+      }
+    }, { passive: false });
+
+    // Viewer bridge (spec design_harness_external_viewer_bridge): broadcast a
+    // node:selected message to the embedding parent when the user clicks a
+    // frame. Pure enhancement — without a parent listener it is a no-op.
+    function notifyNodeSelected(st, fig, frame, index) {
+      var parent = window.parent;
+      if (!parent || parent === window || typeof parent.postMessage !== 'function') return;
+      var fileId = null;
+      try {
+        fileId = new URLSearchParams(window.location.search).get('file');
+      } catch (error) { /* not embedded via /open */ }
+      var pageEl = frame.closest ? frame.closest('.cf-page') : null;
+      var nameEl = fig.querySelectorAll('.cf-fig-label span')[1];
+      var labelEl = fig.querySelector('.cf-fig-label b');
+      var r = frame.getBoundingClientRect();
+      var v = viewportSize(st);
+      parent.postMessage(
+        buildNodeSelectedPayload({
+          fileId: fileId,
+          pageId: pageEl ? pageEl.getAttribute('data-page') : null,
+          nodeId: frame.getAttribute('data-cf-id') || 'frame-' + index,
+          nodeType: frame.getAttribute('data-cf-type') || 'frame',
+          nodeLabel: nameEl ? nameEl.textContent : labelEl ? labelEl.textContent : null,
+          rect: {
+            x: (r.left - v.left - st.T.x) / st.T.s,
+            y: (r.top - v.top - st.T.y) / st.T.s,
+            width: r.width / st.T.s,
+            height: r.height / st.T.s,
+          },
+        }),
+        '*',
+      );
+    }
+
+    st.figs.forEach(function (fig, i) {
+      var frame = fig.querySelector('.cf-frame');
+      if (frame) {
+        frame.addEventListener('click', function () {
+          selectFrame(st, i, true);
+          notifyNodeSelected(st, fig, frame, i);
+        });
+      }
+    });
+    var zoomButtons = page.querySelectorAll('.cf-zoombar [data-zoom]');
+    Array.prototype.forEach.call(zoomButtons, function (btn) {
+      btn.addEventListener('click', function () {
+        var v = viewportSize(st);
+        var mode = btn.getAttribute('data-zoom');
+        if (mode === 'in') zoomAt(st, v.w / 2, v.h / 2, 1.25);
+        else if (mode === 'out') zoomAt(st, v.w / 2, v.h / 2, 0.8);
+        else if (mode === 'fit') fit(st);
+      });
+    });
+    if (zoomValue) {
+      zoomValue.addEventListener('click', function () {
+        var v = viewportSize(st);
+        zoomAt(st, v.w / 2, v.h / 2, 1 / st.T.s);
+      });
+    }
+    return st;
+  }
+
+  function wireLaunchSheets(page) {
+    Array.prototype.forEach.call(page.querySelectorAll('.cf-ls'), function (ls) {
+      var panels = Array.prototype.slice.call(ls.querySelectorAll('[data-ls-state]'));
+      var timers = {};
+      function go(name) {
+        panels.forEach(function (p) {
+          var on = p.getAttribute('data-ls-state') === name;
+          p.classList.toggle('is-active', on);
+          if (on) {
+            var timeout = p.getAttribute('data-ls-timeout');
+            if (timeout) {
+              var key = p.getAttribute('data-ls-state');
+              clearTimeout(timers[key]);
+              timers[key] = setTimeout(function () {
+                var after = p.getAttribute('data-ls-after');
+                if (after) go(after);
+              }, parseInt(timeout, 10) || 1200);
+            }
+          }
+        });
+      }
+      Array.prototype.forEach.call(ls.querySelectorAll('[data-ls-go]:not([data-ls-submit])'), function (ctrl) {
+        ctrl.addEventListener('click', function (e) {
+          e.stopPropagation();
+          go(ctrl.getAttribute('data-ls-go'));
+        });
+      });
+      // data-ls-toggle collapses/expands a section inside the same state
+      // (e.g. the card intro); the button mirrors the section state.
+      function toggleScope(ctrl) {
+        return ctrl.closest('[data-ls-state]') || ls;
+      }
+      Array.prototype.forEach.call(ls.querySelectorAll('[data-ls-toggle]'), function (ctrl) {
+        var target = toggleScope(ctrl).querySelector(ctrl.getAttribute('data-ls-toggle'));
+        if (target) {
+          ctrl.classList.toggle('is-active', !target.classList.contains('is-collapsed'));
+        }
+        ctrl.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var t = toggleScope(ctrl).querySelector(ctrl.getAttribute('data-ls-toggle'));
+          if (!t) return;
+          var collapsed = t.classList.toggle('is-collapsed');
+          ctrl.classList.toggle('is-active', !collapsed);
+        });
+      });
+      // data-ls-expand swaps a source row for an inline input panel in place
+      // (open/close on the same button; the source list stays visible).
+      Array.prototype.forEach.call(ls.querySelectorAll('[data-ls-expand]'), function (ctrl) {
+        ctrl.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var host = ctrl.closest('.cf-ls-expand');
+          if (!host) return;
+          if (ctrl.getAttribute('data-ls-expand') === 'open') {
+            host.classList.add('is-open');
+          } else {
+            host.classList.remove('is-open');
+          }
+        });
+      });
+      Array.prototype.forEach.call(ls.querySelectorAll('textarea[data-ls-draft]'), function (ta) {
+        var submit = ls.querySelector('[data-ls-submit]');
+        function update() {
+          if (submit) submit.classList.toggle('is-disabled', ta.value.trim() === '');
+        }
+        ta.addEventListener('input', update);
+        if (submit) {
+          submit.addEventListener('click', function (e) {
+            if (submit.classList.contains('is-disabled')) {
+              e.preventDefault();
+              return;
+            }
+            var next = submit.getAttribute('data-ls-go');
+            if (next) go(next);
+          });
+        }
+        update();
+      });
+    });
+  }
+
+  var states = pages.map(buildPageState);
+  if (!states.some(Boolean)) return;
+  var current = -1;
+
+  function activatePage(index) {
+    current = index;
+    pageTabs.forEach(function (tab, i) {
+      tab.classList.toggle('is-active', i === index);
+      tab.setAttribute('aria-selected', i === index ? 'true' : 'false');
+    });
+    pages.forEach(function (page, i) {
+      page.classList.toggle('is-active', i === index);
+    });
+    var st = states[index];
+    if (!st) return;
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        if (!st.initialized) {
+          fit(st);
+          selectFrame(st, 0, false);
+          st.initialized = true;
+        }
+      });
+    });
+    try {
+      history.replaceState(null, '', '#page-' + (index + 1));
+    } catch (e) {
+      // Sandboxed iframes may disallow history updates; page switching still works.
+    }
+  }
+
+  pageTabs.forEach(function (tab, i) {
+    tab.addEventListener('click', function () { activatePage(i); });
+  });
+  pages.forEach(function (page) {
+    wireLaunchSheets(page);
+  });
+  var initial = parseInt((location.hash.match(/#page-(\d+)/) || [])[1] || '1', 10) - 1;
+  if (isNaN(initial) || initial < 0 || initial >= pages.length) initial = 0;
+  activatePage(initial);
+  window.addEventListener('hashchange', function () {
+    var m = (location.hash || '').match(/#page-(\d+)/);
+    var idx = m ? parseInt(m[1], 10) - 1 : 0;
+    if (idx >= 0 && idx < pages.length && idx !== current) {
+      activatePage(idx);
+    }
+  });
+})();
+</script>
+</body>
+</html>
