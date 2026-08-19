@@ -17,7 +17,7 @@ English | [简体中文](./README.zh.md)
   </a>
 </details>
 
-<details>
+<details open>
   <summary><b>🎨 2. Multi-Frame Canvas (Grok Mobile App)</b> — Infinite canvas with responsive device frames</summary>
   <br/>
   <a href="./docs/assets/canvas-viewer-grok.png">
@@ -25,7 +25,7 @@ English | [简体中文](./README.zh.md)
   </a>
 </details>
 
-<details>
+<details open>
   <summary><b>📊 3. Living Specs (AI Apps Comparison)</b> — Multi-page design specs version-controlled in Git</summary>
   <br/>
   <a href="./docs/assets/canvas-viewer-comparison.png">

@@ -17,7 +17,7 @@
   </a>
 </details>
 
-<details>
+<details open>
   <summary><b>🎨 2. 多画板交互画布 (Grok Mobile App)</b> — 无限缩放画板与多设备屏幕排版</summary>
   <br/>
   <a href="./docs/assets/canvas-viewer-grok.png">
@@ -25,7 +25,7 @@
   </a>
 </details>
 
-<details>
+<details open>
   <summary><b>📊 3. 随代码版本控制的设计 Specs (AI Apps Comparison)</b> — 多页面设计文档直观对比</summary>
   <br/>
   <a href="./docs/assets/canvas-viewer-comparison.png">
