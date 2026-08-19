@@ -60,14 +60,31 @@
 
 ## 🚀 快速上手
 
-### 1. 安装为 DeepSeek Harness 插件
+### 1. 安装到 DeepSeek Harness
+
+#### 方式一：直接通过 Git 仓库安装（推荐）
+
+直接将 GitHub 远程仓库安装到 DSH Web profile 中：
 
 ```sh
-# 添加为 DSH 插件
-dsh plugin --profile web add /path/to/dsh-canvas-design-harness
+dsh plugin --profile web add git+https://github.com/askman-dev/dsh-canvas-design-harness.git
+```
 
-# 在普通终端重启 Web profile
-python3 scripts/restart-web.py
+#### 方式二：本地克隆安装（适合开发者）
+
+```sh
+git clone https://github.com/askman-dev/dsh-canvas-design-harness.git
+dsh plugin --profile web add ./dsh-canvas-design-harness
+```
+
+#### 重启生效
+
+安装完成后，在终端启动或重启 DSH Web Profile：
+
+```sh
+dsh web
+# 或使用守护化重启脚本：
+python3 /path/to/dsh-canvas-design-harness/scripts/restart-web.py
 ```
 
 刷新浏览器页面（`http://127.0.0.1:3080`），即可在会话右上角看到「**设计大厅**」Tab。

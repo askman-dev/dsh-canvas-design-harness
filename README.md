@@ -60,14 +60,31 @@ English | [简体中文](./README.zh.md)
 
 ## 🚀 Quick Start
 
-### 1. Install as a DeepSeek Harness Plugin
+### 1. Install into DeepSeek Harness
+
+#### Option A: Direct Git Install (Recommended)
+
+Install directly from GitHub into your DSH Web profile:
 
 ```sh
-# Add plugin to the web profile
-dsh plugin --profile web add /path/to/dsh-canvas-design-harness
+dsh plugin --profile web add git+https://github.com/askman-dev/dsh-canvas-design-harness.git
+```
 
-# Restart the web profile from a regular terminal
-python3 scripts/restart-web.py
+#### Option B: Local Clone (For Development)
+
+```sh
+git clone https://github.com/askman-dev/dsh-canvas-design-harness.git
+dsh plugin --profile web add ./dsh-canvas-design-harness
+```
+
+#### Restart Web Profile
+
+After installation, restart the DSH Web profile in your terminal:
+
+```sh
+dsh web
+# or run the restart script:
+python3 /path/to/dsh-canvas-design-harness/scripts/restart-web.py
 ```
 
 Refresh your browser (`http://127.0.0.1:3080`), and you will see the **Design Gallery** (`设计大厅`) tab in the top navigation ring.
